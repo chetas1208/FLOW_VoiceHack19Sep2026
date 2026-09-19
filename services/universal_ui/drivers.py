@@ -15,6 +15,11 @@ from services.engine.manifest import approved_base_url
 from services.universal_ui.evidence import scrub
 
 
+def scrub_lines(text, limit=8000):
+    """Redact each line (scrub truncates whole messages) and bound the total size."""
+    return '\n'.join(scrub(line) for line in str(text).splitlines()[:400])[:limit]
+
+
 class UnsupportedAction(RuntimeError):
     """This backend does not provide the requested UI capability."""
 
@@ -35,6 +40,39 @@ def _auth_headers(spec):
     if not token_var:
         return {}
     return {'Authorization': 'Bearer ' + os.environ[token_var]}
+
+
+DISCOVER_JS = '''() => {
+  const clip = (x, n) => (x || '').replace(/\\s+/g, ' ').trim().slice(0, n);
+  const visible = el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+  const labelOf = el => {
+    if (el.getAttribute('aria-label')) return clip(el.getAttribute('aria-label'), 100);
+    if (el.id) { const l = document.querySelector('label[for="' + CSS.escape(el.id) + '"]'); if (l) return clip(l.innerText, 100); }
+    const wrap = el.closest('label'); if (wrap) return clip(wrap.innerText, 100);
+    return null; };
+  const nameOf = el => clip(el.getAttribute('aria-label') || el.innerText || el.value || '', 100);
+  const field = el => ({tag: el.tagName.toLowerCase(), type: el.getAttribute('type') || (el.tagName === 'SELECT' ? 'select' : null),
+    name: el.getAttribute('name'), id: el.id || null, label: labelOf(el), required: el.required === true,
+    test_id: el.getAttribute('data-testid'), placeholder: el.getAttribute('placeholder'),
+    options: el.tagName === 'SELECT' ? [...el.options].slice(0, 20).map(o => o.value) : undefined});
+  const forms = [...document.querySelectorAll('form')].slice(0, 20).map(f => ({
+    id: f.id || null, method: (f.getAttribute('method') || 'get').toLowerCase(),
+    action_path: f.getAttribute('action') ? new URL(f.action, location.href).pathname : null,
+    fields: [...f.querySelectorAll('input,select,textarea')].filter(x => !['hidden', 'submit', 'button'].includes(x.type)).slice(0, 30).map(field),
+    submit: [...f.querySelectorAll('button,input[type=submit]')].filter(b => (b.type || 'submit') === 'submit').slice(0, 1).map(b => ({name: nameOf(b), test_id: b.getAttribute('data-testid'), id: b.id || null}))[0] || null}));
+  return { title: document.title,
+    headings: [...document.querySelectorAll('h1,h2')].slice(0, 20).map(x => clip(x.textContent, 120)),
+    landmarks: [...document.querySelectorAll('main,nav,header,footer,aside,[role=main],[role=navigation],[role=search]')].slice(0, 20).map(x => x.getAttribute('role') || x.tagName.toLowerCase()),
+    links: [...document.querySelectorAll('a[href]')].slice(0, 100).map(a => a.href),
+    link_texts: [...document.querySelectorAll('a[href]')].slice(0, 100).map(a => ({href: a.href, text: clip(a.innerText, 80)})),
+    forms,
+    live_regions: [...document.querySelectorAll('[aria-live],[role=status],[role=alert]')].slice(0, 10).map(x => ({id: x.id || null, role: x.getAttribute('role'), test_id: x.getAttribute('data-testid')})),
+    controls: [...document.querySelectorAll('button,input,select,textarea,[role="button"]')].filter(visible).slice(0, 60).map(x => ({
+      tag: x.tagName.toLowerCase(), role: x.getAttribute('role'), type: x.getAttribute('type'),
+      test_id: x.getAttribute('data-testid'), label: labelOf(x) || x.getAttribute('aria-label'),
+      id: x.id, text: clip(x.innerText, 100), in_form: !!x.closest('form')}))
+  };
+}'''
 
 
 class PlaywrightDriver:
@@ -251,15 +289,22 @@ class PlaywrightDriver:
         return self.origin + getattr(self, '_fixture_path', '/') if self.fixture_relay else self.page.url
     def screenshot(self): return self.page.screenshot(full_page=False, animations='disabled', timeout=5000)
 
+    def settle(self, timeout_ms=2000):
+        """Bounded wait for client-rendered pages; a page that never idles is not an error."""
+        try:
+            self.page.wait_for_load_state('networkidle', timeout=timeout_ms)
+        except Exception:
+            self.events.add('runner', 'warning', 'page did not reach network idle')
+
     def discover(self):
-        return self.page.evaluate('''() => ({ title: document.title,
-          headings: [...document.querySelectorAll('h1,h2')].slice(0,20).map(x=>x.textContent.trim().slice(0,120)),
-          links: [...document.querySelectorAll('a[href]')].slice(0,100).map(a=>a.href),
-          controls: [...document.querySelectorAll('button,input,select,textarea,[role="button"]')].slice(0,60).map(x=>({
-            tag:x.tagName.toLowerCase(), role:x.getAttribute('role'), type:x.getAttribute('type'),
-            test_id:x.getAttribute('data-testid'), label:x.getAttribute('aria-label'),
-            id:x.id, text:(x.innerText||'').trim().slice(0,100)}))
-        })''')
+        """Structural, bounded inventory. Values typed into fields are never collected."""
+        page = self.page.evaluate(DISCOVER_JS)
+        try:
+            # Playwright's ARIA snapshot: the accessibility tree as assistive technology sees it.
+            page['aria_snapshot'] = scrub_lines(self.page.locator('body').aria_snapshot(timeout=2000))
+        except Exception:
+            page['aria_snapshot'] = None
+        return page
 
     def close(self):
         try:

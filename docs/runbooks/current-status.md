@@ -1,5 +1,14 @@
 # Current executable scope / release audit
 
+## Update 2026-09-19 (supersedes conflicting statements below)
+
+- Baseline audit: `docs/engineering/implementation-audit.md`. Capability matrix: `docs/engineering/capability-matrix.md`.
+- Two-agent HACP collaboration ran live between separate Codex and Claude Code processes through the `hacp` CLI. It produced 7 counterparty-verified contracts; the transcript is in `docs/engineering/hacp/`. Work after that session is single-agent and self-verified.
+- Verified here: native Chromium loopback networking; the Rust HACP bridge compiles and settles; Docker sandbox runs live (the timeout leak is fixed); the OTel Collector compose path delivers spans (after a gzip fix); UI `auth_env` works with no cross-origin token leak.
+- New: `python -m scripts.onboarding_demo` onboards an unfamiliar token-gated app, proposes workflows, runs an owner-approved one with concurrent logs and OTLP, detects a lost write that the UI reports as success, writes a bug report, and verifies the fix through regression selection.
+- Setup: Python 3.12+ required (`python3` may be 3.9). Run `python -m playwright install chromium` before `pytest`. Opt-in live tests: `QA_DOCKER_LIVE=1`, `QA_OTEL_COMPOSE_LIVE=1`, `QA_BROWSER_ACCEPTANCE=1`.
+
+
 ## Implemented and verified locally (run `pytest`)
 
 - New universal UI engine: Chromium-rendered interactions, concurrent redacted

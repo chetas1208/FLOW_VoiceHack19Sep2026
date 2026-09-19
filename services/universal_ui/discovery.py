@@ -22,7 +22,7 @@ def discover(spec, *, max_pages=10, graph=None):
     if spec.get('allow_mutations') or spec.get('allow_destructive'):
         raise ValueError('discovery must run without mutation permissions')
     opts = {k: v for k, v in spec.items() if k in (
-        'id', 'origin', 'driver', 'browser', 'viewport', 'fixture_relay', 'timeout_ms')}
+        'id', 'origin', 'driver', 'browser', 'viewport', 'fixture_relay', 'timeout_ms', 'auth_env')}
     opts['steps'] = [{'name': 'landing', 'action': 'goto', 'path': '/'}]
     validate(opts)
     origin = opts['origin'].rstrip('/')
@@ -30,16 +30,22 @@ def discover(spec, *, max_pages=10, graph=None):
     seen = set()
     pages = []
     drafts = []
+    skipped = []
     events = EventStream()
     driver = open_driver(opts, events)
     try:
         while queue and len(pages) < max_pages:
             path = queue.popleft()
-            if path in seen or any(token in path.lower() for token in AVOID_GET):
+            if path in seen:
+                continue
+            if any(token in path.lower() for token in AVOID_GET):
+                skipped.append(path)
                 continue
             seen.add(path)
             try:
-                driver.navigate(path)
+                status = driver.navigate(path)
+                if hasattr(driver, 'settle'):
+                    driver.settle()
                 page = driver.discover()
             except Exception:
                 pages.append({'path': path, 'status': 'UNAVAILABLE', 'controls': [], 'links': 0})
@@ -52,8 +58,13 @@ def discover(spec, *, max_pages=10, graph=None):
                 if (parsed.scheme, parsed.hostname, parsed.port) != (root.scheme, root.hostname, root.port):
                     continue
                 candidate = parsed.path or '/'
-                if candidate not in seen and candidate not in queue and not any(token in candidate.lower() for token in AVOID_GET):
+                if any(token in candidate.lower() for token in AVOID_GET):
+                    if candidate not in skipped:
+                        skipped.append(candidate)
+                    continue
+                if candidate not in seen and candidate not in queue:
                     queue.append(candidate)
+                if candidate != path and candidate not in approved:
                     approved.append(candidate)
             controls = page['controls']
             for index, control in enumerate(controls):
@@ -72,8 +83,12 @@ def discover(spec, *, max_pages=10, graph=None):
                                'proposal': 'Owner should define expected outcome and independent state oracle',
                                'status': 'PROPOSED_REQUIRES_OWNER_APPROVAL',
                                'mutation_permission_granted': False})
-            pages.append({'path': path, 'title_fingerprint': hashlib.sha256(page['title'].encode()).hexdigest()[:16],
-                          'heading_count': len(page['headings']), 'controls': controls,
+            pages.append({'path': path, 'http_status': status, 'title': page['title'][:200],
+                          'title_fingerprint': hashlib.sha256(page['title'].encode()).hexdigest()[:16],
+                          'headings': page['headings'], 'heading_count': len(page['headings']),
+                          'landmarks': page.get('landmarks', []), 'forms': page.get('forms', []),
+                          'live_regions': page.get('live_regions', []), 'controls': controls,
+                          'aria_snapshot': page.get('aria_snapshot'),
                           'discovered_links': approved[:30]})
             if graph is not None:
                 project = spec.get('project_id', 'local'); version = spec.get('version', 'unversioned')
@@ -87,5 +102,6 @@ def discover(spec, *, max_pages=10, graph=None):
         driver.close()
     return {'origin': origin, 'driver': 'web', 'read_only': True, 'pages': pages,
             'page_count': len(pages), 'truncated': bool(queue), 'drafts': drafts[:100],
+            'skipped_unsafe_links': skipped[:50],
             'proposed_scenarios_approved': False, 'network_mode': 'fixture_relay'
             if spec.get('fixture_relay') else 'native_browser'}

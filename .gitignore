@@ -7,3 +7,4 @@ __pycache__/
 .local-runs/
 .hacp/
 *.sqlite3
+target/
