@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flow-api
+  namespace: flow
+  labels: &labels
+    app.kubernetes.io/name: flow-cloud
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: flow
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: flow-cloud
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels: *labels
+    spec:
+      serviceAccountName: flow-cloud
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # preStop sleep (15s) + uvicorn graceful shutdown (60s) must fit inside this window so WebSocket
+      # clients receive a close frame and reconnect to another pod instead of being killed.
+      terminationGracePeriodSeconds: 90
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: flow-cloud
+              app.kubernetes.io/component: api
+      containers:
+        - name: api
+          image: ghcr.io/chetas1208/flow-cloud:0.2.0
+          imagePullPolicy: IfNotPresent
+          command: [uvicorn]
+          args:
+            - services.flowcloud.app:create_app
+            - --factory
+            - --host=0.0.0.0
+            - --port=8080
+            - --timeout-graceful-shutdown=60
+            - --no-server-header
+          ports:
+            - {name: http, containerPort: 8080, protocol: TCP}
+          envFrom:
+            - configMapRef: {name: flow-cloud-config}
+          env:
+            - {name: DATABASE_URL, valueFrom: {secretKeyRef: {name: flow-cloud-secrets, key: DATABASE_URL}}}
+            - {name: REDIS_URL, valueFrom: {secretKeyRef: {name: flow-cloud-secrets, key: REDIS_URL}}}
+            - {name: FLOW_JWT_KEYS, valueFrom: {secretKeyRef: {name: flow-cloud-secrets, key: FLOW_JWT_KEYS}}}
+            - {name: FLOW_METRICS_TOKEN, valueFrom: {secretKeyRef: {name: flow-cloud-secrets, key: FLOW_METRICS_TOKEN, optional: true}}}
+          startupProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /health/ready, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec: {command: [sleep, "15"]}
+          resources:
+            requests: {cpu: 200m, memory: 256Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}

@@ -43,6 +43,7 @@ class VisionObservation:
     screen_change_score: float | None = None
     source: str = "moondream"
     metadata: dict[str, Any] = field(default_factory=dict)
+    goal_version: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {"timestamp": iso(self.timestamp), "application": self.application,
@@ -52,4 +53,4 @@ class VisionObservation:
                 "confidence": self.confidence, "visible_evidence": list(self.visible_evidence),
                 "possible_blocker": self.possible_blocker, "possible_completion": self.possible_completion,
                 "task_boundary": self.task_boundary, "screen_change_score": self.screen_change_score,
-                "source": self.source, "metadata": self.metadata}
+                "source": self.source, "metadata": self.metadata, "goal_version": self.goal_version}

@@ -7,8 +7,8 @@ import threading
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from .config import data_dir
-from .events import EventHub, FlowEvent, event
+from .config import data_dir, drift_seconds
+from .events import EventHub, FlowEvent
 from .models import (ActivityCategory, DriftState, Intervention, InterventionChannel,
                      Observation, SessionStatus, WorkSession, ensure_utc, utc_now)
 from .scoring import ScoringEngine
@@ -32,13 +32,32 @@ def _id(prefix: str) -> str:
     return f"{prefix}_{int(datetime.now(timezone.utc).timestamp() * 1000):x}{secrets.token_urlsafe(8)}"
 
 
+SEGMENT_SYNC_EVERY = 6  # observations between incremental segment uploads
+
+
 class SessionManager:
+    """``cloud_sync=True`` writes a durable ``sync_outbox`` row in the same transaction as every entity."""
+
     def __init__(self, store: FlowStore | None = None, hub: EventHub | None = None,
-                 scorer: ScoringEngine | None = None) -> None:
+                 scorer: ScoringEngine | None = None, cloud_sync: bool = False) -> None:
         self.store = store or FlowStore(data_dir())
         self.hub = hub or EventHub()
         self.scorer = scorer or ScoringEngine()
+        self.cloud_sync = cloud_sync
         self._event_lock = threading.RLock()
+
+    @classmethod
+    def from_environment(cls, store: FlowStore | None = None, hub: EventHub | None = None,
+                         scorer: ScoringEngine | None = None) -> "SessionManager":
+        """Production wiring: realistic drift threshold, and cloud sync only while signed in."""
+        from .sync.state import cloud_sync_enabled
+        return cls(store, hub, scorer or ScoringEngine(drift_duration_seconds=drift_seconds()),
+                   cloud_sync=cloud_sync_enabled())
+
+    @property
+    def outbox(self):
+        from .sync.outbox import SyncOutbox
+        return SyncOutbox(self.store)
 
     def _session(self, session_id: str) -> WorkSession:
         result = self.store.get_session(session_id)
@@ -48,8 +67,7 @@ class SessionManager:
 
     def _emit(self, session_id: str, event_type: str, data: dict[str, Any]) -> FlowEvent:
         with self._event_lock:
-            item = event(event_type, session_id, self.store.next_sequence(session_id), data, _id("evt"))
-            self.store.save_event(item)
+            item = self.store.append_event(session_id, event_type, data, _id("evt"), sync=self.cloud_sync)
             self.hub.publish(item)
             return item
 
@@ -59,7 +77,7 @@ class SessionManager:
         now = utc_now()
         session = WorkSession(_id("ses"), goal.strip(), SessionStatus.ACTIVE, now, now,
                               metadata=metadata or {}, created_by=created_by)
-        self.store.save_session(session)
+        self.store.save_session(session, sync=self.cloud_sync)
         self._emit(session.id, "session.started", {"goal": session.goal})
         return session
 
@@ -84,6 +102,11 @@ class SessionManager:
             session.ended_at = now
         self.store.save_session(session)
         self._emit(session.id, event_type, {"status": target.value})
+        if self.cloud_sync:
+            if target == SessionStatus.COMPLETED:
+                self._enqueue_completion(session.id)
+            else:
+                self.sync_segments(session.id)
         return session
 
     def pause_session(self, session_id: str) -> WorkSession:
@@ -113,25 +136,26 @@ class SessionManager:
             except ValueError as exc:
                 raise ValueError("invalid observation category") from exc
         observation.timestamp = ensure_utc(observation.timestamp)
-        previous_metrics = next((item for item in reversed(self.store.list_events(session_id))
-                                 if item.type == "metrics.updated"), None)
+        previous_metrics = self.store.latest_event(session_id, "metrics.updated")
         previous_state = previous_metrics.data.get("drift_state") if previous_metrics else DriftState.UNKNOWN.value
-        self.store.save_observation(observation)
+        self.store.save_observation(observation, sync=self.cloud_sync)
         self._emit(session_id, "observation.created", observation.to_dict())
         metrics = self.metrics(session_id)
         self._emit(session_id, "metrics.updated", metrics.to_dict())
         if metrics.drift_state.value != previous_state:
+            self._emit(session_id, "drift.changed", {"from": previous_state, "to": metrics.drift_state.value})
             was_drifting = previous_state in {DriftState.DRIFTING.value, DriftState.SUSTAINED_DRIFT.value}
             is_drifting = metrics.drift_state in {DriftState.DRIFTING, DriftState.SUSTAINED_DRIFT}
             if is_drifting or was_drifting:
                 transition = "drift.entered" if is_drifting else "drift.cleared"
                 self._emit(session_id, transition, {"from": previous_state, "to": metrics.drift_state.value})
         if metrics.drift_state == DriftState.SUSTAINED_DRIFT:
-            previous = self.store.list_events(session_id)
-            if not any(item.type == "intervention.proposed" and item.data.get("reason") == "sustained_goal_drift" for item in previous):
+            if not self.store.has_intervention_reason(session_id, "sustained_goal_drift"):
                 intervention = Intervention(_id("int"), session_id, utc_now(), "sustained_goal_drift",
                     InterventionChannel.CLI, "Your recent activity appears substantially outside the declared goal.")
                 self.add_intervention(session_id, intervention)
+        if self.cloud_sync and observation.sequence and observation.sequence % SEGMENT_SYNC_EVERY == 0:
+            self.sync_segments(session_id)
         return observation
 
     def observations(self, session_id: str) -> list[Observation]:
@@ -142,7 +166,7 @@ class SessionManager:
         self._session(session_id)
         if intervention.session_id != session_id:
             raise ValueError("intervention session_id does not match target session")
-        self.store.save_intervention(intervention)
+        self.store.save_intervention(intervention, sync=self.cloud_sync)
         self._emit(session_id, "intervention.proposed", intervention.to_dict())
         return intervention
 
@@ -165,3 +189,41 @@ class SessionManager:
                 "observation_count": len(observations),
                 "intervention_count": len(self.interventions(session_id)),
                 "task_segments": [segment.to_dict() for segment in TaskSegmenter().segment(observations)]}
+
+    # ---- cloud sync helpers ---------------------------------------------------------------------
+    def completion_payloads(self, session_id: str) -> dict[str, Any]:
+        """Wire payloads for a finished session: segments, the immutable summary and the stop request."""
+        from .sync import payloads
+        session = self._session(session_id)
+        observations = self.store.list_observations(session_id)
+        interventions = self.store.list_interventions(session_id)
+        events = self.store.list_events(session_id, 0, limit=10 ** 9)
+        segments = TaskSegmenter().segment(observations)
+        metrics = self.scorer.metrics(observations, len(interventions))
+        return {"segments": [payloads.segment_payload(session_id, item) for item in segments],
+                "summary": payloads.summary_payload(session, metrics, observations, interventions, events, segments),
+                "stop": payloads.stop_payload(session)}
+
+    def _enqueue_completion(self, session_id: str) -> None:
+        payload = self.completion_payloads(session_id)
+        items = [("segment", item["id"], item, None) for item in payload["segments"]]
+        items += [("summary", session_id, payload["summary"], None), ("stop", session_id, payload["stop"], None)]
+        self.store.enqueue_many(session_id, items)
+
+    def sync_segments(self, session_id: str) -> int:
+        """Queue current task segments (upserted by id; a higher ``revision`` replaces a queued older one)."""
+        if not self.cloud_sync:
+            return 0
+        from .sync import payloads
+        segments = TaskSegmenter().segment(self.store.list_observations(session_id))
+        items = [("segment", payloads.segment_id(session_id, item.start), payloads.segment_payload(session_id, item), None)
+                 for item in segments]
+        return self.store.enqueue_many(session_id, items)
+
+    def sync_entity(self, session_id: str, kind: str, entity_id: str, revision: int, data: dict[str, Any]) -> bool:
+        """Queue a remote-layer entity (task, approval, recommendation, subtask, goal_version, chat, runtime_state)."""
+        if not self.cloud_sync:
+            return False
+        from .sync import payloads
+        payload = payloads.entity_payload(kind, entity_id, revision, data)
+        return self.store.enqueue("entity", payloads.entity_key(kind, entity_id), session_id, payload)

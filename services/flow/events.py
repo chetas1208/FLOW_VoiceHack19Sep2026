@@ -45,5 +45,6 @@ class EventHub:
             loop.call_soon_threadsafe(queue.put_nowait, event)
 
 
-def event(event_type: str, session_id: str, sequence: int, data: dict[str, Any], event_id: str) -> FlowEvent:
-    return FlowEvent(event_id, event_type, session_id, utc_now(), sequence, data)
+def event(event_type: str, session_id: str, sequence: int, data: dict[str, Any], event_id: str,
+          timestamp: datetime | None = None) -> FlowEvent:
+    return FlowEvent(event_id, event_type, session_id, timestamp or utc_now(), sequence, data)

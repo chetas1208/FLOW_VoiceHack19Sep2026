@@ -1,3 +1,5 @@
-from .engine import EfficiencyEngine, EfficiencyState, GoalRepresentation, Recommendation
+from .engine import (AgentInterval, Drift, EfficiencyConfig, EfficiencyEngine, EfficiencyState, GoalRepresentation,
+                     GoalVersionRecord, Recommendation)
 
-__all__ = ["EfficiencyEngine", "EfficiencyState", "GoalRepresentation", "Recommendation"]
+__all__ = ["AgentInterval", "Drift", "EfficiencyConfig", "EfficiencyEngine", "EfficiencyState", "GoalRepresentation",
+           "GoalVersionRecord", "Recommendation"]

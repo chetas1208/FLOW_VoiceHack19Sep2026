@@ -11,3 +11,11 @@ target/
 build/
 dist/
 *.egg-info/
+node_modules/
+web/dist/
+web/dist-embedded/
+web/.vite/
+services/flow/server/ui_dist/
+artifacts/
+*.log
+.flow-models/

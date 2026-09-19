@@ -42,9 +42,16 @@ class ObserverPipeline:
     async def observe_once(self, reason: CaptureReason = CaptureReason.PERIODIC) -> Observation | None:
         context = await self.observer.active_context()
         if self.privacy.is_excluded(context.application):
-            return self._metadata_observation(context.application, context.window_title, "excluded_context")
+            return self._metadata_observation(context.application, "excluded_context")
         frame = await self.observer.snapshot(reason)
+        if frame is not None and (self.privacy.is_excluded(frame.application)
+                                  or self.privacy.is_excluded(frame.bundle_id)):
+            # Focus moved to an excluded app between the context check and the capture.
+            frame.discard_pixels()
+            return self._metadata_observation(frame.application, "excluded_context")
         if frame is None or not self.change_detector.changed(frame):
+            if frame is not None:
+                frame.discard_pixels()
             return None
         history = [item.to_dict() for item in self.manager.observations(self.session_id)[-10:]]
         try:
@@ -72,8 +79,9 @@ class ObserverPipeline:
             ActivityCategory(fields["category"]), fields["goal_alignment"],
             fields["progress_signal"], fields["confidence"], fields["metadata"]))
 
-    def _metadata_observation(self, application: str | None, title: str | None, reason: str) -> Observation:
+    def _metadata_observation(self, application: str | None, reason: str) -> Observation:
+        # Excluded contexts are metadata-only: the window title is private and is never stored.
         return self.manager.add_observation(self.session_id, Observation(
             _id("obs"), self.session_id, datetime.now(timezone.utc), "observer",
-            application, title, reason, ActivityCategory.UNKNOWN, None, None, None,
+            application, None, reason, ActivityCategory.UNKNOWN, None, None, None,
             {"excluded": True, "reason": reason}))

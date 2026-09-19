@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import secrets
 from datetime import datetime
 from typing import Any
 
@@ -12,12 +11,9 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .models import ActivityCategory, InterventionChannel, InterventionStatus, Observation
-from .auth import CLIAuthRequest, local_token
-from .config import web_endpoint
 from .session_manager import InvalidTransition, SessionManager, SessionNotFound, _id
 
 router = APIRouter(tags=["FLOW"])
-_auth_requests: dict[str, dict[str, str]] = {}
 
 
 class SessionCreate(BaseModel):
@@ -37,58 +33,6 @@ class ObservationCreate(BaseModel):
     progress_signal: float | None = Field(default=None, ge=0, le=1)
     confidence: float | None = Field(default=None, ge=0, le=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class AuthStart(BaseModel):
-    device_id: str = Field(min_length=1, max_length=200)
-
-
-class AuthApprove(BaseModel):
-    state: str = Field(min_length=1, max_length=200)
-
-
-class AuthToken(BaseModel):
-    state: str = Field(min_length=1, max_length=200)
-    code: str = Field(min_length=1, max_length=200)
-    code_verifier: str = Field(min_length=20, max_length=200)
-
-
-@router.post("/v1/cli/auth/start")
-def auth_start(payload: AuthStart):
-    request = CLIAuthRequest.create(payload.device_id)
-    _auth_requests[request.state] = {"device_id": payload.device_id, "challenge": request.challenge,
-                                     "nonce": request.nonce, "code": ""}
-    return {"state": request.state, "nonce": request.nonce, "authorization_url": request.authorization_url(web_endpoint())}
-
-
-@router.post("/v1/cli/auth/approve")
-def auth_approve(payload: AuthApprove):
-    record = _auth_requests.get(payload.state)
-    if not record:
-        raise HTTPException(404, "authorization request not found")
-    record["code"] = secrets.token_urlsafe(24)
-    return {"code": record["code"], "state": payload.state}
-
-
-@router.post("/v1/cli/auth/token")
-def auth_token(payload: AuthToken):
-    record = _auth_requests.pop(payload.state, None)
-    if not record or not record["code"] or not secrets.compare_digest(record["code"], payload.code):
-        raise HTTPException(400, "invalid authorization grant")
-    import base64, hashlib
-    challenge = base64.urlsafe_b64encode(hashlib.sha256(payload.code_verifier.encode()).digest()).rstrip(b"=").decode()
-    if not secrets.compare_digest(challenge, record["challenge"]):
-        raise HTTPException(400, "invalid PKCE verifier")
-    return {"access_token": local_token(), "token_type": "Bearer", "expires_in": 3600,
-            "device_id": record["device_id"]}
-
-
-@router.get("/v1/me")
-def me(request: Request):
-    authorization = request.headers.get("authorization", "")
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(401, "authentication required")
-    return {"id": "local-user", "device_count": 1}
 
 
 def manager(request: Request) -> SessionManager:

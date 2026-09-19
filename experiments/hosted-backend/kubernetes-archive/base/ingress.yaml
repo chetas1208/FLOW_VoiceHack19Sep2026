@@ -1,0 +1,38 @@
+# Only /v1 (REST + WebSockets) is public. /health/* is for kubelet probes and /metrics is scraped in-cluster;
+# neither is routed here. TLS is mandatory: plain HTTP is redirected and device tokens never travel in clear.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: flow-api
+  namespace: flow
+  labels:
+    app.kubernetes.io/name: flow-cloud
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: flow
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # WebSocket (device + viewer channels): long-lived upgrades, no buffering, small bodies.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-body-size: 2m
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [api.flow.example.com]
+      secretName: flow-api-tls
+  rules:
+    - host: api.flow.example.com
+      http:
+        paths:
+          - path: /v1
+            pathType: Prefix
+            backend:
+              service:
+                name: flow-api
+                port: {name: http}

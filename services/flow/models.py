@@ -91,13 +91,15 @@ class Observation:
     progress_signal: float | None = None
     confidence: float | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    # Per-session monotonic sequence (1, 2, 3...), assigned by the store inside the write transaction.
+    sequence: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {"id": self.id, "session_id": self.session_id, "timestamp": iso(self.timestamp),
                 "source": self.source, "app_name": self.app_name, "window_title": self.window_title,
                 "activity_summary": self.activity_summary, "category": self.category.value,
                 "goal_alignment": self.goal_alignment, "progress_signal": self.progress_signal,
-                "confidence": self.confidence, "metadata": self.metadata}
+                "confidence": self.confidence, "metadata": self.metadata, "sequence": self.sequence}
 
 
 @dataclass(slots=True)

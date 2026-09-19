@@ -25,11 +25,14 @@ class ModelSpec:
     runtime: str
     memory_estimate_mb: int
     purpose: str
+    revision: str | None = None  # pinned Hugging Face commit; remote code is only trusted at this revision
 
 
 MODEL_REGISTRY = {
-    "vision": ModelSpec("vision", "Moondream 2B", "2b", "vikhyatk/moondream2", "Apache-2.0", "transformers", 5000, "desktop understanding"),
-    "voice": ModelSpec("voice", "Kokoro-82M", "82m", "hexgrad/Kokoro-82M", "Apache-2.0", "kokoro", 1000, "voice coaching"),
+    "vision": ModelSpec("vision", "Moondream 2B", "2b", "vikhyatk/moondream2", "Apache-2.0", "transformers", 5000, "desktop understanding",
+                    "6b714b26eea5cbd9f31e4edb2541c170afa935ba"),
+    "voice": ModelSpec("voice", "Kokoro-82M", "82m", "hexgrad/Kokoro-82M", "Apache-2.0", "kokoro", 1000, "voice coaching",
+                  "f3ff3571791e39611d31c381e3a41a3af07b4987"),
 }
 
 
@@ -79,7 +82,7 @@ class ModelManager:
                     from huggingface_hub import snapshot_download
                 except ImportError as exc:
                     raise RuntimeError("install model downloads with: pip install huggingface_hub") from exc
-                snapshot_download(repo_id=spec.source, local_dir=str(staging))
+                snapshot_download(repo_id=spec.source, revision=spec.revision, local_dir=str(staging))
                 files = [path for path in staging.rglob("*") if path.is_file()]
                 if not files:
                     raise RuntimeError(f"model download produced no files: {spec.name}")
@@ -87,7 +90,7 @@ class ModelManager:
                 for path in sorted(files):
                     digest.update(str(path.relative_to(staging)).encode()); digest.update(path.read_bytes())
                 (staging / "flow-model.json").write_text(json.dumps({"key": item, "name": spec.name,
-                    "version": spec.version, "source": spec.source, "license": spec.license,
+                    "version": spec.version, "source": spec.source, "revision": spec.revision, "license": spec.license,
                     "sha256": digest.hexdigest()}, indent=2))
                 if target.exists():
                     shutil.rmtree(target)

@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import platform
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import AsyncIterator, Protocol
+from typing import TYPE_CHECKING, AsyncIterator, Protocol
 
 from .frame import CapturedFrame, CaptureReason
+
+if TYPE_CHECKING:
+    from ..privacy.policy import PrivacyPolicy
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,8 +74,18 @@ class MockDesktopObserver:
         return ObserverContext()
 
 
-def create_observer() -> DesktopObserver:
+def create_observer(privacy: "PrivacyPolicy | None" = None) -> DesktopObserver:
+    """Select an observer. ``FLOW_OBSERVER=replay`` (+ ``FLOW_OBSERVER_SCRIPT=path.json``) replays a
+    scripted, synthetic desktop for tests and demos; otherwise macOS uses the native observer."""
+    mode = os.getenv("FLOW_OBSERVER", "auto").strip().lower()
+    if mode == "replay":
+        from .replay import load_replay_frames
+        return MockDesktopObserver(load_replay_frames(os.getenv("FLOW_OBSERVER_SCRIPT")))
+    if mode not in {"auto", "macos", ""}:
+        raise ValueError(f"unknown FLOW_OBSERVER {mode!r}; use auto, macos or replay")
     if platform.system() == "Darwin":
+        from ..config import config_dir
+        from ..privacy.policy import PrivacyPolicy
         from .macos import MacOSObserver
-        return MacOSObserver()
+        return MacOSObserver(privacy=privacy or PrivacyPolicy.load(config_dir() / "privacy.json"))
     return UnsupportedObserver()
