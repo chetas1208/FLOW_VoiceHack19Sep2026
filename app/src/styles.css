@@ -693,14 +693,63 @@ blockquote {
   flex-wrap: wrap;
 }
 
-/* ---------- responsive ---------- */
+/* ---------- ui demo ---------- */
+.demo-hero{display:grid;grid-template-columns:minmax(0,1fr) 300px;overflow:hidden;padding:0}
+.demo-stage{position:relative;min-width:0;height:520px;background:radial-gradient(600px 380px at 55% 45%,rgba(34,211,238,.07),transparent 65%),radial-gradient(500px 320px at 80% 90%,rgba(139,92,246,.08),transparent 60%),rgba(6,9,15,.65)}
+.demo-stage>div:first-child{width:100%;height:100%}
+.demo-stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.demo-hint{position:absolute;left:16px;bottom:14px;font-size:10px;letter-spacing:.14em;color:rgba(167,176,194,.65);text-transform:uppercase;pointer-events:none}
+.demo-side{border-left:1px solid var(--line);padding:24px;display:flex;flex-direction:column;gap:16px;background:rgba(9,12,20,.5);min-width:0}
+.demo-side .eyebrow{margin-bottom:6px}
+.demo-legend{display:flex;flex-direction:column;gap:9px}
+.demo-legend span{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-2)}
+.demo-legend i{width:9px;height:9px;border-radius:3px;flex:none}
+.demo-legend b{margin-left:auto;color:var(--text-1);font-size:12px}
+.node-detail{display:flex;flex-direction:column;gap:9px;align-items:flex-start;padding-top:14px;border-top:1px solid var(--line)}
+.node-detail h3{font-size:15px}
+.node-detail p{font-size:12px}
+.node-detail small{font-size:10.5px;color:var(--text-2)}
+.node-detail .bar-track{width:100%;margin-top:2px}
+.node-tag{background:rgba(7,10,17,.94);border:1px solid var(--line);border-radius:11px;padding:7px 11px;display:flex;flex-direction:column;gap:2px;white-space:nowrap;box-shadow:0 8px 30px rgba(0,0,0,.55);pointer-events:none}
+.node-tag strong{color:#f8fafc;font-size:12px}
+.node-tag small{color:#a7b0c2;font-size:10px}
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.kpi-card{display:flex;flex-direction:column;gap:9px;padding:18px 20px}
+.kpi-card small{font-size:9px;letter-spacing:.14em;color:rgba(167,176,194,.55);text-transform:uppercase}
+.kpi-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.kpi-top span{font-size:10px;letter-spacing:.14em;color:var(--text-2);text-transform:uppercase;font-weight:650}
+.kpi-top strong{font-size:24px;font-weight:690}
+.spark{height:38px}
+.demo-grid{display:grid;grid-template-columns:1.55fr 1fr;gap:16px}
+.chart-body{height:240px;margin-top:18px}
+.chart-body.tall{height:270px}
+.chart-tip{background:rgba(10,14,22,.95);border:1px solid var(--line);border-radius:11px;padding:9px 12px;display:flex;flex-direction:column;gap:4px;font-size:11px;box-shadow:0 10px 34px rgba(0,0,0,.5)}
+.chart-tip strong{color:#f8fafc}
+.donut-wrap{position:relative;height:230px;margin-top:16px}
+.donut-center{position:absolute;inset:0;display:grid;place-items:center;text-align:center;pointer-events:none;flex-direction:column}
+.donut-center strong{display:block;font-size:26px;font-weight:690;color:var(--text-1)}
+.donut-center small{font-size:9px;letter-spacing:.18em;color:var(--text-2);text-transform:uppercase}
+.legend-col{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.legend-col span{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-2)}
+.legend-col i{width:9px;height:9px;border-radius:3px;flex:none}
+.legend-col b{margin-left:auto;color:var(--text-1)}
+.demo-intervention{margin-top:12px}
+.demo-intervention .quote{color:var(--text-1);font-size:13px;font-style:italic}
+.demo-intervention .tiny{display:block;margin-top:6px}
+
+
 @media (max-width: 1120px) {
   .cockpit-grid, .report-overview, .report-bottom { grid-template-columns: 1fr; }
   .cockpit-grid > .nucleus, .metric-stack, .cockpit-grid > .current-activity { grid-column: 1; grid-row: auto; }
   .focus-grid { grid-template-columns: repeat(2, 1fr); }
   .orb-stage { min-height: 340px; }
+  .demo-hero { grid-template-columns: 1fr; }
+  .demo-side { border-left: 0; border-top: 1px solid var(--line); }
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .demo-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 880px) {
+  .demo-stage { height: 400px; }
   .shell { flex-direction: column; }
   .sidebar { position: sticky; flex-direction: row; height: auto; width: 100%; flex: none; padding: 10px 16px; border-right: 0; border-bottom: 1px solid var(--line); }
   .brand { width: 40px; height: 40px; font-size: 17px; border-radius: 13px; margin: 0 12px 0 0; flex: none; }
