@@ -1,3 +1,19 @@
+# FLOW · VoiceHack 19 Sep 2026
+
+FLOW is a local-first AI work-session observer and coach built beside the
+ProofHound QA foundation. It records durable work sessions, ingests structured
+observations, computes evidence-backed focus and drift metrics, supports privacy
+exclusions, offline buffering, local daemon IPC, and provides an installable
+`flow` CLI. Screen capture and voice are isolated behind replaceable macOS and
+Kokoro adapters; FLOW observes the user's computer and never controls it.
+
+The current repository contains the tested backend foundation, observer
+interfaces, deterministic replay tooling, local authentication/daemon seams,
+cloud client boundary, and Kubernetes design artifacts. See
+[`docs/flow/backlog.md`](docs/flow/backlog.md) for implemented versus pending
+macOS and production-cloud work. ProofHound remains available as the underlying
+QA platform and compatibility suite.
+
 # ProofHound
 
 Autonomous QA foundation for web UIs, full-stack, tool-using agentic, and hybrid applications.

@@ -8,3 +8,6 @@ __pycache__/
 .hacp/
 *.sqlite3
 target/
+build/
+dist/
+*.egg-info/

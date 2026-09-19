@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flow-api
+  namespace: flow
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: flow-api}
+  template:
+    metadata: {labels: {app: flow-api}}
+    spec:
+      securityContext: {runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: api
+          image: ghcr.io/example/flow-api:latest
+          ports: [{name: http, containerPort: 8080}]
+          envFrom: [{secretRef: {name: flow-api-secrets}}]
+          readinessProbe: {httpGet: {path: /health/ready, port: http}, periodSeconds: 10}
+          livenessProbe: {httpGet: {path: /health/live, port: http}, periodSeconds: 20}
+          resources: {requests: {cpu: 100m, memory: 256Mi}, limits: {cpu: 1, memory: 512Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: flow-api, namespace: flow}
+spec:
+  selector: {app: flow-api}
+  ports: [{name: http, port: 80, targetPort: http}]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: flow-api, namespace: flow}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: flow-api}
+  minReplicas: 2
+  maxReplicas: 10
+  metrics: [{type: Resource, resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}}]

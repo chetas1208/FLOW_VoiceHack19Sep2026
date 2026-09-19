@@ -22,6 +22,8 @@ from services.engine.runner import execute
 from services.engine.store import Store
 from services.graph.graph import Graph
 from benchmarks.benchmark import benchmark
+from services.flow.api import router as flow_router
+from services.flow.session_manager import SessionManager
 
 DATA = Path(os.getenv('QA_DATA_DIR', '.local-runs')).resolve()
 DATA.mkdir(parents=True, exist_ok=True)
@@ -29,7 +31,10 @@ QUEUE = Queue(DATA / 'jobs.sqlite3')
 STORE = Store(DATA)
 GRAPH = Graph(DATA / 'graph.sqlite3')
 app = FastAPI(title='ProofHound local development API', version='0.5.0')
+app.state.flow_manager = SessionManager()
 KINDS = {'agentic', 'fullstack', 'fault-injection'}
+
+app.include_router(flow_router)
 
 
 @app.middleware('http')
@@ -69,6 +74,16 @@ class Submission(BaseModel):
 def health():
     return {'status': 'ok', 'mode': 'single-tenant-loopback-development',
             'token_auth_enabled': bool(os.getenv('QA_API_TOKEN'))}
+
+
+@app.get('/health/live')
+def health_live():
+    return {'status': 'ok'}
+
+
+@app.get('/health/ready')
+def health_ready():
+    return {'status': 'ok', 'flow_store': str(app.state.flow_manager.store.path)}
 
 
 @app.post('/jobs', status_code=202)
