@@ -32,7 +32,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
-from ..config import cloud_sync_disabled, config_dir, web_endpoint
+from ..config import config_dir, web_endpoint
 from ..remote_models import TERMINAL_COMMAND_STATUSES, CommandStatus, new_id
 from .ipc_protocol import MAX_LINE_BYTES, NOT_FOUND, UNAUTHENTICATED, IpcError, encode, read_token
 

@@ -6,12 +6,11 @@ privacy exclusions/text redaction, validated analyzer contract, offline event
 queue, optional Keychain credentials, PKCE request construction, local CLI,
 and an optional Kokoro adapter.
 
-The device plane remains local. It owns screen permission, capture, redaction,
-semantic analysis policy, bounded buffering, and optional audio. The cloud
-boundary receives structured observations and is represented by the versioned
-client/API seam. The web plane is not implemented.
+The device plane remains local and authoritative. It owns screen permission,
+capture, redaction, Qwen semantic analysis, SQLite state, recommendations,
+delegated execution, and optional audio. Remote access is a transport concern;
+there is no hosted FLOW session or model backend.
 
-The checked-in Kubernetes files are deployment design artifacts, not a claim of
-a live cluster or production image. They deliberately scale API pods, not
-screen capture. PostgreSQL, Redis, durable workers, migrations, and external
-secret management remain production targets.
+The checked-in Kubernetes files are historical design artifacts only and are
+not part of the supported runtime. FLOW does not require PostgreSQL, Redis,
+cloud workers, or external secret management.

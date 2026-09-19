@@ -1,8 +1,9 @@
 # FLOW backend v1
 
-FLOW is an isolated work-session domain beside ProofHound. It observes semantic
-activity supplied by a future local observer; it does not control the user's
-computer, capture screens, call a vision model, or deliver voice.
+FLOW is a local-first work-session backend. The daemon owns session state,
+observation, local intelligence, recommendations, execution, and voice. The
+web client is only a future remote interface; no hosted FLOW backend is
+required.
 
 ## Architecture and persistence
 
@@ -24,7 +25,10 @@ With the existing platform server running, FLOW exposes:
 * `GET/POST /flow/sessions/{id}/observations`
 * `GET /flow/sessions/{id}/interventions`
 * `GET /flow/sessions/{id}/events?after=N`
-* WebSocket `/ws/flow/sessions/{id}`
+* WebSocket `/ws/flow/sessions/{id}` and `/v1/ws/{id}`
+* `GET /v1/sessions/{id}/report`
+* `GET /v1/sessions/{id}/recommendation`
+* `POST /v1/sessions/{id}/ask`
 
 Events are persisted with monotonically increasing per-session sequences and
 published immediately to local WebSocket subscribers. Event types currently
@@ -73,9 +77,10 @@ python -m pytest tests/flow -q
 The platform remains localhost-only by default. Placeholder privacy settings
 are `FLOW_STORE_SCREENSHOTS=false` and `FLOW_SCREENSHOT_RETENTION_SECONDS=0`.
 
-## Not in v1
+## Environment-dependent verification
 
-Desktop observation, ScreenCaptureKit, adaptive capture, vision/classification,
-raw frame retention, final dashboard UI, authentication beyond the existing
-local token, cloud sync, OAuth, and voice/ElevenLabs delivery are intentionally
+ScreenCaptureKit capture, Qwen inference, and Kokoro audio require a supported
+macOS/runtime installation and are not claimed verified by Linux tests. Raw
+frames remain ephemeral by default. There is no ElevenLabs dependency, hosted
+session authority, or cloud model execution.
 not implemented.

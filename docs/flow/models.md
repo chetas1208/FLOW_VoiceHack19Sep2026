@@ -1,9 +1,13 @@
 # Local model manager
 
-FLOW has exactly two registered local model artifacts:
+FLOW has exactly two registered default local model artifacts:
 
-* Moondream 2B (`vikhyatk/moondream2`) for visual perception.
+* Qwen3-VL 4B Instruct (`Qwen/Qwen3-VL-4B-Instruct`) for local intelligence.
 * Kokoro-82M (`hexgrad/Kokoro-82M`) for local speech.
+
+The `vision` storage key is retained for backward compatibility with existing
+installations; use `flow models install intelligence` for the product command.
+The legacy Moondream adapter remains optional and is not installed by default.
 
 `ModelManager` stores them under `FLOW_MODEL_DIR`, or the FLOW configuration
 directory's `models/` folder. Downloads use a staging directory and an atomic

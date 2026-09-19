@@ -15,6 +15,7 @@ STATE_FILE = "voice-state.json"
 def add_parser(subparsers) -> None:
     parser = subparsers.add_parser(NAME, help="inspect or control FLOW voice coaching")
     parser.add_argument("action", choices=["status", "on", "off", "mute", "unmute", "stop", "test"])
+    parser.add_argument("duration", nargs="?", help="mute duration such as 30m")
     parser.add_argument("--minutes", type=int, default=30, help="mute duration (default: 30)")
 
 
@@ -50,10 +51,21 @@ def run(args) -> int:
         _write(state)
         print("FLOW voice: disabled")
     elif action == "mute":
-        if args.minutes < 1:
+        minutes = args.minutes
+        duration = getattr(args, "duration", None)
+        if duration:
+            raw = duration.strip().lower()
+            if raw.endswith("m"):
+                raw = raw[:-1]
+            try:
+                minutes = int(raw)
+            except ValueError:
+                print("flow voice: duration must be an integer number of minutes, such as 30m")
+                return 2
+        if minutes < 1:
             print("flow voice: --minutes must be at least 1")
             return 2
-        until = datetime.now(timezone.utc) + timedelta(minutes=args.minutes)
+        until = datetime.now(timezone.utc) + timedelta(minutes=minutes)
         state["muted_until"] = until.isoformat()
         _write(state)
         print(f"FLOW voice: muted until {until.isoformat()}")

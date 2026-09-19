@@ -26,7 +26,8 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("version")
     models = sub.add_parser("models")
     models.add_argument("action", choices=["status", "install", "remove"])
-    models.add_argument("target", nargs="?", choices=["vision", "voice"])
+    models.add_argument("target", nargs="?", choices=["intelligence", "vision", "voice"])
+    models.add_argument("--variant", choices=["4b", "2b"], help="explicit Qwen intelligence size")
     seen: dict[int, object] = {}
     for module in _plugins().values():
         if id(module) not in seen:  # a module with several NAMES registers all of them in one add_parser call
@@ -53,7 +54,7 @@ def _models(args) -> int:
             targets = [args.target] if args.target else list(MODEL_REGISTRY)
             for target in targets:
                 print(f"Installing {MODEL_REGISTRY[target].name}...")
-                item = manager.install(target)[0]
+                item = manager.install(target, args.variant)[0]
                 print(f"{item['name']}: {item['status']}")
     except (RuntimeError, ValueError) as exc:
         print(f"flow models: {exc}", file=sys.stderr)

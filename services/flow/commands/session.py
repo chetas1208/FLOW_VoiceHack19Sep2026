@@ -24,14 +24,14 @@ from ..runtime import SessionRuntime
 from ..session_manager import InvalidTransition, SessionManager, SessionNotFound
 from ..vision.schema import VisionActivityType, VisionObservation
 
-NAMES = ["start", "stop", "pause", "resume", "daemon", "e2e", "efficiency"]
+NAMES = ["start", "stop", "pause", "resume", "status", "daemon", "e2e", "efficiency"]
 
 
 def add_parser(sub) -> None:
     start = sub.add_parser("start")
     start.add_argument("goal_arg", nargs="?")
     start.add_argument("--goal")
-    for name in ("stop", "pause", "resume"):
+    for name in ("stop", "pause", "resume", "status"):
         cmd = sub.add_parser(name)
         cmd.add_argument("--session")
     daemon = sub.add_parser("daemon")
@@ -87,6 +87,8 @@ def run(args) -> int:
         return _efficiency()
     if args.command == "e2e":
         return _portable_e2e(args.goal)
+    if args.command in {"start", "stop", "pause", "resume", "status"}:
+        return _daemon_session_command(args)
     service = SessionManager.from_environment()
     try:
         if args.command == "start":
@@ -109,10 +111,39 @@ def run(args) -> int:
                 show_session(service.pause_session(session_id), service)
             elif args.command == "resume":
                 show_session(service.resume_session(session_id), service)
+            elif args.command == "status":
+                show_session(service.get_session(session_id), service)
     except (ValueError, SessionNotFound, InvalidTransition) as exc:
         print(f"flow: {exc}", file=sys.stderr)
         return 2
     return 0
+
+
+def _daemon_session_command(args) -> int:
+    from ..remote.ipc_client import call, ensure_daemon
+    try:
+        ensure_daemon()
+        if args.command == "start":
+            goal = args.goal or args.goal_arg
+            if not goal:
+                raise ValueError("start requires a goal")
+            result = call("session.start", {"goal": goal})
+        else:
+            session_id = getattr(args, "session", None)
+            if not session_id:
+                sessions = call("session.list", {}).get("sessions", [])
+                active = [item for item in sessions if item.get("status") in {"active", "paused"}]
+                if len(active) != 1:
+                    raise ValueError("specify --session unless exactly one active session exists")
+                session_id = active[0]["id"]
+            result = call({"stop": "session.stop", "pause": "session.pause", "resume": "session.resume",
+                           "status": "session.status"}[args.command], {"session_id": session_id})
+        session = result.get("session", result)
+        print(f"FLOW SESSION\n\nID        {session.get('id')}\nGoal      {session.get('goal')}\nStatus    {session.get('status')}")
+        return 0
+    except (ValueError, RuntimeError) as exc:
+        print(f"flow: {exc}", file=sys.stderr)
+        return 2
 
 
 def _efficiency() -> int:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -12,6 +12,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .models import ActivityCategory, InterventionChannel, InterventionStatus, Observation
 from .session_manager import InvalidTransition, SessionManager, SessionNotFound, _id
+from .recommend.context import RecommendationContext
+from .recommend.engine import ActionRecommendationEngine
+from .remote.assistant import AssistantContext, answer
 
 router = APIRouter(tags=["FLOW"])
 
@@ -33,6 +36,10 @@ class ObservationCreate(BaseModel):
     progress_signal: float | None = Field(default=None, ge=0, le=1)
     confidence: float | None = Field(default=None, ge=0, le=1)
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AskCreate(BaseModel):
+    question: str = Field(min_length=1, max_length=1000)
 
 
 def manager(request: Request) -> SessionManager:
@@ -89,6 +96,47 @@ def get_session(session_id: str, request: Request):
 @router.get("/v1/sessions/{session_id}")
 def get_v1_session(session_id: str, request: Request):
     return get_session(session_id, request)
+
+
+@router.get("/v1/sessions/{session_id}/report")
+def get_v1_report(session_id: str, request: Request):
+    return get_session(session_id, request)
+
+
+def _recommendation(service: SessionManager, session_id: str):
+    session = service.get_session(session_id)
+    observations = service.observations(session_id)
+    metrics = service.metrics(session_id)
+    latest = observations[-1] if observations else None
+    context = RecommendationContext(
+        session_id=session.id, goal=session.goal, now=datetime.now(timezone.utc),
+        current_task=latest.activity_summary if latest else None, observations=observations[-60:],
+        progress=metrics.progress, alignment=metrics.goal_alignment, drift_state=metrics.drift_state.value,
+        confidence=metrics.confidence, session_started_at=session.started_at)
+    item = ActionRecommendationEngine().recommend(context)
+    return item.to_dict() if item else None
+
+
+@router.get("/v1/sessions/{session_id}/recommendation")
+def get_v1_recommendation(session_id: str, request: Request):
+    try:
+        return {"recommendation": _recommendation(manager(request), session_id)}
+    except (ValueError, SessionNotFound) as exc:
+        raise _error(exc) from exc
+
+
+@router.post("/v1/sessions/{session_id}/ask")
+def ask_v1_session(session_id: str, payload: AskCreate, request: Request):
+    try:
+        service = manager(request)
+        session = service.get_session(session_id)
+        report = service.report(session_id)
+        context = AssistantContext(session_id=session.id, goal=session.goal, status=session.status.value,
+            metrics=report["metrics"], segments=report["task_segments"],
+            observations=[item.to_dict() for item in service.observations(session_id)])
+        return answer(payload.question, context).to_dict()
+    except (ValueError, SessionNotFound) as exc:
+        raise _error(exc) from exc
 
 
 def _transition(session_id: str, request: Request, operation):
@@ -184,6 +232,7 @@ def flow_session_debug(session_id: str, request: Request):
 
 
 @router.websocket("/ws/flow/sessions/{session_id}")
+@router.websocket("/v1/ws/{session_id}")
 async def event_stream(websocket: WebSocket, session_id: str):
     await websocket.accept()
     service = getattr(websocket.app.state, "flow_manager", None) or SessionManager()

@@ -22,7 +22,7 @@ def run(args) -> int:
     print("FLOW DOCTOR\n")
     print(f"Platform      {platform.platform()}")
     print(f"Observer      {observer}")
-    print(f"Vision        {models['vision']['status']} ({models['vision']['path']})")
+    print(f"Intelligence  {models['vision']['status']} ({models['vision']['path']})")
     print(f"Voice         {models['voice']['status']} ({voice.get('model_path') or models['voice']['path']})")
     print(f"Data          {'ready' if data_dir().parent.exists() else 'not_ready'} ({data_dir()})")
     print(f"Config        {config_dir()}")
