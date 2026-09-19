@@ -1,7 +1,9 @@
 import {create} from 'zustand';
 import type {Session, Meta, Metrics, Intervention, Analyzer} from './types';
+/** Absolute backend origin when the UI is hosted elsewhere (e.g. Vercel → laptop over Tailscale). */
+export const API_BASE=(import.meta.env.VITE_API_URL??'').replace(/\/+$/,'');
 export async function api<T>(path:string, method='GET', body?:unknown):Promise<T> {
- const r=await fetch('/api'+path,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
+ const r=await fetch(`${API_BASE}/api${path}`,{method,headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
  const data=await r.json(); if(!r.ok) throw new Error(data.error||`Request failed (${r.status})`); return data;
 }
 interface State {sessions:Session[]; current:Session|null; meta:Meta|null; connection:string; error:string|null; refresh:()=>Promise<void>; select:(id:string)=>Promise<void>; action:(action:string,body?:unknown)=>Promise<Session>; setError:(s:string|null)=>void}
@@ -15,7 +17,7 @@ const types=['session.started','session.paused','session.resumed','session.stopp
 export function connect(){
  const store=useFlow; const fail=(e:unknown)=>store.setState({error:String(e instanceof Error?e.message:e)});
  void store.getState().refresh().catch(fail);void api<Meta>('/meta').then(meta=>store.setState({meta})).catch(fail);
- const stream=new EventSource('/api/events');
+ const stream=new EventSource(`${API_BASE}/api/events`);
  stream.onopen=()=>store.setState({connection:'Connected'});
  stream.onerror=()=>store.setState({connection:navigator.onLine?'Reconnecting':'Offline'});
  const reconcile=(e:MessageEvent)=>{const d=JSON.parse(e.data);if(d.resnapshot)void store.getState().refresh().catch(fail);};

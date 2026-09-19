@@ -49,6 +49,25 @@ export function createServer({ store, settings, hub, analyzer, coach, runtime })
   const remoteToken = process.env.FLOW_AUTH_TOKEN || null;
   const allowRemote = process.env.FLOW_ALLOW_REMOTE === '1';
 
+  /** Exact-origin CORS allowlist, e.g. FLOW_ALLOWED_ORIGINS=https://flow.vercel.app. */
+  const allowedOrigins = (process.env.FLOW_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+
+  function applyCors(req, res) {
+    const origin = (req.headers.origin || '').replace(/\/+$/, '');
+    if (!origin || !allowedOrigins.includes(origin)) return;
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    // Private Network Access: the API lives on a tailnet (CGNAT) address, so a
+    // public HTTPS origin (e.g. Vercel) must be explicitly allowed to reach it.
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+  }
+
   const json = (res, status, body) => {
     const payload = JSON.stringify(body ?? null);
     res.writeHead(status, {
@@ -145,6 +164,12 @@ export function createServer({ store, settings, hub, analyzer, coach, runtime })
 
   const server = http.createServer(async (req, res) => {
     try {
+      applyCors(req, res);
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
       const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
       const p = url.pathname;
 

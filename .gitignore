@@ -21,3 +21,4 @@ artifacts/
 .flow-models/
 native/bin/
 data/
+.vercel/
