@@ -3,6 +3,8 @@ __pycache__/
 .DS_Store
 .venv/
 .env
+.env.local
+.env.*.local
 .pytest_cache/
 .local-runs/
 .hacp/
