@@ -19,3 +19,5 @@ services/flow/server/ui_dist/
 artifacts/
 *.log
 .flow-models/
+native/bin/
+data/
