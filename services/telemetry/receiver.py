@@ -5,6 +5,7 @@ Supports traces only: no logs/metrics, tail sampling, distributed HA or mTLS.
 Bind to loopback and place behind a trusted Collector/proxy for real deployments.
 """
 import hmac
+import zlib
 import os
 import re
 import sqlite3
@@ -40,6 +41,31 @@ def database():
     return connection
 
 
+MAX_BODY=2_097_152
+
+
+def decode_body(body,encoding):
+    """OTLP/HTTP allows gzip (the Collector's otlphttp exporter default).
+
+    Decompression is streamed and capped so a small compressed body cannot expand
+    past MAX_BODY (decompression bomb). Other encodings are refused."""
+    encoding=(encoding or 'identity').strip().lower()
+    if encoding in ('','identity'):
+        return body
+    if encoding!='gzip':
+        raise HTTPException(415,'unsupported OTLP content encoding')
+    inflater=zlib.decompressobj(16+zlib.MAX_WBITS)
+    try:
+        data=inflater.decompress(body,MAX_BODY+1)
+    except zlib.error as exc:
+        raise HTTPException(400,'invalid gzip OTLP body') from exc
+    if len(data)>MAX_BODY or inflater.unconsumed_tail:
+        raise HTTPException(413,'decompressed OTLP request exceeds 2MiB')
+    if not inflater.eof:
+        raise HTTPException(400,'truncated gzip OTLP body')
+    return data
+
+
 def safe_attributes(attrs):
     values={}
     for attribute in attrs:
@@ -66,11 +92,12 @@ async def ingest(request:Request):
         raise HTTPException(401,'OTLP ingestion authentication required')
     if 'application/x-protobuf' not in request.headers.get('content-type',''):
         raise HTTPException(415,'OTLP protobuf content type required')
-    if int(request.headers.get('content-length','0') or 0)>2_097_152:
+    if int(request.headers.get('content-length','0') or 0)>MAX_BODY:
         raise HTTPException(413,'OTLP request exceeds 2MiB')
     body=await request.body()
-    if len(body)>2_097_152:
+    if len(body)>MAX_BODY:
         raise HTTPException(413,'OTLP request exceeds 2MiB')
+    body=decode_body(body,request.headers.get('content-encoding'))
     proto=ExportTraceServiceRequest()
     try:
         proto.ParseFromString(body)
