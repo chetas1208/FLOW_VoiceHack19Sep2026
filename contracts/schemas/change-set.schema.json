@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentgraph.example/schemas/change-set.schema.json",
+  "title": "change-set",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "change_id",
+    "project_id",
+    "base_version_id",
+    "target_version_id",
+    "changed_components"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "change_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "base_version_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target_version_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "changed_components": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "impacted_scenarios": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

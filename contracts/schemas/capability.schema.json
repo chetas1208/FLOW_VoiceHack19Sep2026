@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentgraph.example/schemas/capability.schema.json",
+  "title": "capability",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "capability_id",
+    "project_id",
+    "kind",
+    "name",
+    "source",
+    "verification_status"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "capability_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "enum": [
+        "feature",
+        "agent",
+        "tool",
+        "workflow",
+        "route",
+        "api"
+      ]
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string"
+    },
+    "verification_status": {
+      "enum": [
+        "inferred",
+        "observed",
+        "approved"
+      ]
+    }
+  }
+}

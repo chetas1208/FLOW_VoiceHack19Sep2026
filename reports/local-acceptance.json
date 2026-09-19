@@ -1,0 +1,89 @@
+{
+  "generated_at": "2026-09-19T10:21:45.296940+00:00",
+  "scope": "local universal-UI developer engine, not production acceptance",
+  "checks": {
+    "python_tests": {
+      "status": "PASS",
+      "returncode": 0,
+      "output_tail": [
+        "........s......................................... [ 80%]",
+        "............                                                             [100%]",
+        "61 passed, 1 skipped, 22 subtests passed in 38.65s"
+      ]
+    },
+    "json_schemas": {
+      "status": "PASS",
+      "returncode": 0,
+      "output_tail": [
+        "VALID application-version.schema.json",
+        "VALID capability.schema.json",
+        "VALID change-set.schema.json",
+        "VALID evidence.schema.json",
+        "VALID finding.schema.json",
+        "VALID project.schema.json",
+        "VALID requirement.schema.json",
+        "VALID scenario.schema.json",
+        "VALID test-run.schema.json",
+        "VALID trace-reference.schema.json",
+        "VALID verdict.schema.json",
+        "Validated 11 schemas"
+      ]
+    },
+    "reference_demo": {
+      "status": "PASS",
+      "returncode": 0,
+      "output_tail": [
+        "    \"rust_contract_lifecycle_verified\": false",
+        "  },",
+        "  \"discovery\": {",
+        "    \"files\": 4,",
+        "    \"symbols\": 36,",
+        "    \"routes\": 0,",
+        "    \"agent_hints\": 2,",
+        "    \"truncated\": false,",
+        "    \"skipped\": []",
+        "  },",
+        "  \"all_reference_expectations_met\": true",
+        "}"
+      ]
+    },
+    "universal_ui_demo": {
+      "status": "PASS",
+      "returncode": 0,
+      "output_tail": [
+        "      \"trace_id\": \"cc64a838836ff142f0eae3616b3ab117\",",
+        "      \"findings\": [",
+        "        \"state_mismatch\",",
+        "        \"concurrent_runtime_error\"",
+        "      ],",
+        "      \"report\": \"/mnt/data/agentgraph-qa/.local-runs/ui-demo/defective.html\"",
+        "    }",
+        "  ],",
+        "  \"expected_verdicts_matched\": true,",
+        "  \"fixture_relay\": true,",
+        "  \"native_chromium_networking_verified\": false",
+        "}"
+      ]
+    },
+    "hacp_rust_lifecycle": {
+      "status": "UNVERIFIED",
+      "reason": "Cargo unavailable in this runtime"
+    },
+    "docker_compose_config": {
+      "status": "UNVERIFIED",
+      "reason": "Docker unavailable in this runtime"
+    }
+  },
+  "manual_blockers": [
+    "Production-grade container isolation, tenancy and security review",
+    "Actual Docker Collector deployment and persistent volume permissions",
+    "External HACP/Claude/Codex agent launch and protocol interoperability",
+    "Complete A2A conformance and remote agents",
+    "Native Chromium network verification (fixture relay is not native browser networking)",
+    "Real Appium/mobile and desktop driver validation on supported hardware",
+    "Third-party application pilots, realistic detection benchmark and human calibration",
+    "Hosted deployment, observability SLOs, load tests and operational review"
+  ],
+  "local_checks_passed": true,
+  "production_release_approved": false
+}

@@ -1,0 +1,40 @@
+name: agentgraph-qa-checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python scripts/validate_contracts.py
+      # Browser tests run in their own job after installing Chromium.
+      - run: python -m pytest -q --ignore=tests/test_universal_ui.py
+      - run: python -m benchmarks.benchmark
+      - run: python -m services.platform.hacp_mailbox
+  playwright-acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: python -m pytest -q tests/test_universal_ui.py
+      - run: python -m pytest -q tests/test_engine.py -k chromium
+      - run: python -m scripts.ui_demo
+        env:
+          QA_BROWSER_ACCEPTANCE: '1'
+          QA_BROWSER_FIXTURE_RELAY: '1'
+  hacp-rust-bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo run --manifest-path integrations/hacp/Cargo.toml
+        # Cargo may download transitive dependencies; this has not been run locally.
