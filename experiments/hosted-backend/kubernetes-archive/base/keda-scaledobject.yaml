@@ -1,0 +1,34 @@
+# Requires KEDA (>= 2.10) installed in the cluster: https://keda.sh/docs/deploy/
+# Scales flow-worker on the number of pending jobs. The Secret key KEDA_DATABASE_URL must be a plain libpq URL
+# (postgresql://user:pass@host:5432/db?sslmode=require) -- not the SQLAlchemy `postgresql+psycopg://` form.
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: flow-worker-postgres
+  namespace: flow
+  labels:
+    app.kubernetes.io/part-of: flow
+spec:
+  secretTargetRef:
+    - {parameter: connection, name: flow-cloud-secrets, key: KEDA_DATABASE_URL}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: flow-worker
+  namespace: flow
+  labels:
+    app.kubernetes.io/part-of: flow
+spec:
+  scaleTargetRef: {name: flow-worker}
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  pollingInterval: 15
+  cooldownPeriod: 120
+  triggers:
+    - type: postgresql
+      authenticationRef: {name: flow-worker-postgres}
+      metadata:
+        query: "SELECT count(*) FROM jobs WHERE status='pending'"
+        targetQueryValue: "20"
+        activationTargetQueryValue: "0"

@@ -1,0 +1,54 @@
+# Schema migrations are a controlled release step, never a pod-start side effect.
+# Jobs are immutable: delete the previous one first (`kubectl -n flow delete job flow-migrate --ignore-not-found`).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: flow-migrate
+  namespace: flow
+  labels:
+    app.kubernetes.io/name: flow-cloud
+    app.kubernetes.io/component: migrate
+    app.kubernetes.io/part-of: flow
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: flow-cloud
+        app.kubernetes.io/component: migrate
+        app.kubernetes.io/part-of: flow
+    spec:
+      restartPolicy: Never
+      serviceAccountName: flow-cloud
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: migrate
+          image: ghcr.io/chetas1208/flow-cloud:0.2.0
+          imagePullPolicy: IfNotPresent
+          command: [python, -m, services.flowcloud.migrate]
+          envFrom:
+            - configMapRef: {name: flow-cloud-config}
+          env:
+            - {name: DATABASE_URL, valueFrom: {secretKeyRef: {name: flow-cloud-secrets, key: DATABASE_URL}}}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 16Mi}

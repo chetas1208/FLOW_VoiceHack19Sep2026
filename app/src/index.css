@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-0: #06080d;
+  --bg-1: #0a0d14;
+  --surface-1: rgba(17, 24, 39, 0.82);
+  --surface-2: rgba(21, 28, 44, 0.92);
+  --line: rgba(148, 163, 184, 0.16);
+  --text-1: #f8fafc;
+  --text-2: #a7b0c2;
+  --cyan: #22d3ee;
+  --violet: #8b5cf6;
+  --magenta: #ec4899;
+  --lime: #a3e635;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --r-card: 22px;
+  --shadow-float: 0 18px 60px rgba(0, 0, 0, 0.36);
+  --edge-glow: 0 0 0 1px rgba(34, 211, 238, 0.16), 0 0 32px rgba(139, 92, 246, 0.08);
+  color-scheme: dark;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg-0);
+  color: var(--text-1);
+  font-family: -apple-system, BlinkMacSystemFont, Inter, 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+/* Timers and scores must not jitter as digits change (spec §11). */
+.tnum { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

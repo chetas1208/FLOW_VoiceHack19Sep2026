@@ -1,0 +1,21 @@
+# Non-secret configuration only. Secrets (DATABASE_URL, REDIS_URL, FLOW_JWT_KEYS, FLOW_METRICS_TOKEN)
+# live in the `flow-cloud-secrets` Secret; see deploy/kubernetes/secrets.example.yaml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flow-cloud-config
+  namespace: flow
+  labels:
+    app.kubernetes.io/part-of: flow
+data:
+  FLOW_ENV: production
+  FLOW_AUTH_MODE: remote
+  FLOW_LOG_LEVEL: INFO
+  # The ingress controller is the only hop in front of the API; trust its X-Forwarded-For.
+  FLOW_TRUST_PROXY: "true"
+  FLOW_API_URL: https://api.flow.example.com
+  FLOW_WEB_URL: https://app.flow.example.com
+  FLOW_ALLOWED_ORIGINS: https://app.flow.example.com
+  FLOW_OIDC_ISSUER: https://idp.example.com/
+  FLOW_OIDC_AUDIENCE: flow-api
+  FLOW_OIDC_JWKS_URL: https://idp.example.com/.well-known/jwks.json

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://proofhound.example/schemas/application-version.schema.json",
+  "title": "application-version",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "version_id",
+    "project_id",
+    "revision",
+    "environment"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "version_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "environment": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prompt_revision": {
+      "type": "string"
+    },
+    "model_configuration_hash": {
+      "type": "string"
+    },
+    "configuration_hash": {
+      "type": "string"
+    }
+  }
+}

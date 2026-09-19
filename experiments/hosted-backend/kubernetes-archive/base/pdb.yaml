@@ -1,0 +1,27 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: flow-api
+  namespace: flow
+  labels:
+    app.kubernetes.io/part-of: flow
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: flow-cloud
+      app.kubernetes.io/component: api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: flow-worker
+  namespace: flow
+  labels:
+    app.kubernetes.io/part-of: flow
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: flow-cloud
+      app.kubernetes.io/component: worker

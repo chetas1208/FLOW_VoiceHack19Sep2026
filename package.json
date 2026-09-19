@@ -1,0 +1,50 @@
+{
+  "name": "flow-session-intelligence",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "FLOW — privacy-first, evidence-backed AI work-session intelligence. Local observation, semantic analysis, interval-based metrics, 3D cockpit, and a restrained voice coach.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "concurrently -n api,web -c cyan,magenta \"node src/server.js\" \"vite --config app/vite.config.ts\"",
+    "build": "vite build --config app/vite.config.ts",
+    "build:native": "bash scripts/build-native.sh",
+    "cli": "node src/cli.js",
+    "demo": "node scripts/demo.mjs",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "node --test tests/unit/*.test.js",
+    "test:integration": "node --test tests/integration/*.test.js",
+    "test:e2e": "playwright test --config tests/e2e/playwright.config.ts",
+    "test:all": "npm run test && npm run test:e2e",
+    "typecheck": "tsc --noEmit -p app/tsconfig.json"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.1",
+    "@playwright/test": "^1.50.1",
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@types/three": "^0.173.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.2",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.11"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.127.0",
+    "@react-three/drei": "^9.121.4",
+    "@react-three/fiber": "^8.17.14",
+    "framer-motion": "^11.18.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.15.1",
+    "three": "^0.173.0",
+    "zustand": "^5.0.3"
+  }
+}

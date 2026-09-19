@@ -1,0 +1,9 @@
+# Shared by the app (base/) and the migration Job (migrate/): namespace, identity, non-secret config.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+  - configmap.yaml
+  - networkpolicy-default-deny.yaml
+  - networkpolicy-dns.yaml

@@ -1,0 +1,14 @@
+{
+  "id": "orders-ui-idempotency",
+  "project_id": "reference",
+  "origin": "http://127.0.0.1:8765",
+  "allow_mutations": true,
+  "steps": [
+    {"name": "open", "action": "goto", "path": "/"},
+    {"name": "title", "action": "assert_title", "expected": "QA reference orders"},
+    {"name": "create", "action": "click", "locator": {"by": "role", "value": "button"}},
+    {"name": "result", "action": "wait_for", "locator": {"by": "css", "value": "#result"}},
+    {"name": "no_browser_errors", "action": "assert_no_console_errors"},
+    {"name": "no_http_errors", "action": "assert_no_http_errors"}
+  ]
+}

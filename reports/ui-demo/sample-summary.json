@@ -1,0 +1,28 @@
+{
+  "results": [
+    {
+      "fixture": "corrected",
+      "expected": "PASS",
+      "verdict": "PASS",
+      "run_id": "e380480f-dc74-40db-b1e8-1f0a0c111d37",
+      "trace_id": "c12e66eab966e57b5703edcbd2ae8eb3",
+      "findings": [],
+      "report": "corrected.example.html"
+    },
+    {
+      "fixture": "defective",
+      "expected": "FAIL",
+      "verdict": "FAIL",
+      "run_id": "38d939db-c20f-4f12-99c1-f2165462de13",
+      "trace_id": "cc64a838836ff142f0eae3616b3ab117",
+      "findings": [
+        "state_mismatch",
+        "concurrent_runtime_error"
+      ],
+      "report": "defective.example.html"
+    }
+  ],
+  "expected_verdicts_matched": true,
+  "fixture_relay": true,
+  "native_chromium_networking_verified": false
+}

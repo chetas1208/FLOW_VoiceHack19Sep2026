@@ -1,0 +1,12 @@
+# Release-step kustomization: applies namespace/config/identity plus the one-shot migration Job.
+# The application (base/) is applied only AFTER this Job completes. See docs/flow/kubernetes.md.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: flow
+resources:
+  - ../core
+  - migrate-job.yaml
+  - networkpolicy-migrate.yaml
+images:
+  - name: ghcr.io/chetas1208/flow-cloud
+    newTag: "0.2.0"

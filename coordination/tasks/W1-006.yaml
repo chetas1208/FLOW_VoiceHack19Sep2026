@@ -1,0 +1,13 @@
+# Planning manifest only: translate to actual HACP contract schema after inspecting implementation.
+task_id: W1-006
+owner: A5
+counterparty: A0
+status: proposed
+title: Evaluator benchmark
+depends_on: [W1-001]
+deliverable: Known-defect labels and independent assertions
+acceptance:
+  - Artifact has reproducible validation instructions
+  - Evidence and commit SHA supplied by owner
+  - Counterparty verifies independently
+  - CI gate passes before merge

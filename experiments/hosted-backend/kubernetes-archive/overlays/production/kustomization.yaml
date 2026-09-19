@@ -1,0 +1,17 @@
+# Example production overlay. Copy to overlays/<your-env>/ and edit; do not commit real hosts or secrets.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: flow
+resources:
+  - ../../base
+images:
+  - name: ghcr.io/chetas1208/flow-cloud
+    newTag: "0.2.0"          # or: digest: sha256:<image digest>
+patches:
+  - target: {kind: Ingress, name: flow-api}
+    patch: |-
+      - {op: replace, path: /spec/rules/0/host, value: api.flow.example.com}
+      - {op: replace, path: /spec/tls/0/hosts/0, value: api.flow.example.com}
+  - target: {kind: Deployment, name: flow-api}
+    patch: |-
+      - {op: replace, path: /spec/replicas, value: 3}
