@@ -1,19 +1,18 @@
 """Thread- and process-safe SQLite persistence for the FLOW domain.
 
 Every write runs inside ``BEGIN IMMEDIATE`` so per-session ``sequence`` numbers (observations and events) are
-assigned under the database write lock: two processes (CLI + daemon) can never mint the same sequence. When
-``sync=True`` the matching ``sync_outbox`` row is inserted in the *same* transaction.
+assigned under the database write lock: two processes (CLI + daemon) can never mint the same sequence. Additive
+schema changes are versioned with ``PRAGMA user_version`` and applied under the same lock.
 """
 
 from __future__ import annotations
 
 import json
 import sqlite3
-import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any, Iterator
 
 from .events import FlowEvent
 from .models import (ActivityCategory, Intervention, InterventionChannel, InterventionStatus,
@@ -46,24 +45,35 @@ CREATE INDEX IF NOT EXISTS idx_flow_interventions_session_time ON flow_intervent
 CREATE INDEX IF NOT EXISTS idx_flow_events_session_sequence ON flow_events(session_id, sequence);
 """
 
-_V2_SYNC = """
-CREATE TABLE IF NOT EXISTS sync_outbox (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, session_id TEXT NOT NULL, sequence INTEGER,
-  payload TEXT NOT NULL,
-  state TEXT NOT NULL DEFAULT 'pending' CHECK (state IN ('pending','in_flight','synced','failed')),
-  attempt_count INTEGER NOT NULL DEFAULT 0, next_attempt_at TEXT,
-  created_at TEXT NOT NULL, synced_at TEXT, last_error TEXT,
-  UNIQUE(entity_type, entity_id));
-CREATE INDEX IF NOT EXISTS idx_sync_outbox_state ON sync_outbox(state, session_id, id);
-CREATE INDEX IF NOT EXISTS idx_sync_outbox_session ON sync_outbox(session_id, entity_type, sequence);
-CREATE TABLE IF NOT EXISTS sync_state (
-  key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL);
+_V2_SCHEMA = """
+CREATE TABLE IF NOT EXISTS entities (
+  session_id TEXT NOT NULL, kind TEXT NOT NULL, entity_id TEXT NOT NULL, revision INTEGER NOT NULL,
+  status TEXT, data_json TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  PRIMARY KEY (session_id, kind, entity_id));
+CREATE INDEX IF NOT EXISTS idx_entities_session_kind_status ON entities(session_id, kind, status);
+CREATE INDEX IF NOT EXISTS idx_entities_kind_status ON entities(kind, status);
+CREATE TABLE IF NOT EXISTS paired_clients (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, public_key TEXT NOT NULL, created_at TEXT NOT NULL,
+  last_seen_at TEXT, revoked_at TEXT, permissions TEXT NOT NULL DEFAULT '[]');
+CREATE INDEX IF NOT EXISTS idx_paired_clients_public_key ON paired_clients(public_key);
+CREATE TABLE IF NOT EXISTS pairing_tokens (
+  token_hash TEXT PRIMARY KEY, mode TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS commands_seen (
+  command_id TEXT PRIMARY KEY, client_id TEXT, session_id TEXT, type TEXT NOT NULL, status TEXT NOT NULL,
+  payload_json TEXT, result_json TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, expires_at TEXT);
+CREATE INDEX IF NOT EXISTS idx_commands_seen_session ON commands_seen(session_id, created_at);
 """
 
+ENTITY_KINDS = ("task", "approval", "recommendation", "subtask", "goal_version", "chat", "runtime_state")
+DEFAULT_CLIENT_PERMISSIONS = ("read", "command")
+MAX_PAIRING_ATTEMPTS = 5
 
-class _Conn(sqlite3.Connection):
-    enqueued: bool = False
+
+def _ts(value: datetime | None = None) -> str:
+    """Fixed-width UTC timestamp so lexical order == chronological order in SQL comparisons."""
+    value = ensure_utc(value or datetime.now(timezone.utc))
+    return value.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 class FlowStore:
@@ -71,8 +81,6 @@ class FlowStore:
         self.root = Path(directory).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.path = self.root / "flow.sqlite3"
-        self._listeners: list[Callable[[], None]] = []
-        self._lock = threading.Lock()
         db = self.connection()
         try:
             db.execute("PRAGMA journal_mode=WAL")
@@ -82,29 +90,26 @@ class FlowStore:
 
     # ---- connections ---------------------------------------------------------------------------
     def connection(self) -> sqlite3.Connection:
-        db = sqlite3.connect(self.path, timeout=10, isolation_level=None, factory=_Conn)
+        db = sqlite3.connect(self.path, timeout=10, isolation_level=None)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
         db.execute("PRAGMA busy_timeout=10000")
         return db
 
     @contextmanager
-    def _tx(self) -> Iterator[_Conn]:
+    def _tx(self) -> Iterator[sqlite3.Connection]:
         """Write transaction holding the database write lock from the start (``BEGIN IMMEDIATE``)."""
         db = self.connection()
         try:
             db.execute("BEGIN IMMEDIATE")
             try:
-                yield db  # type: ignore[misc]
+                yield db
             except BaseException:
                 db.execute("ROLLBACK")
                 raise
             db.execute("COMMIT")
-            notify = db.enqueued
         finally:
             db.close()
-        if notify:
-            self._notify()
 
     @contextmanager
     def _read(self) -> Iterator[sqlite3.Connection]:
@@ -113,17 +118,6 @@ class FlowStore:
             yield db
         finally:
             db.close()
-
-    def on_enqueue(self, callback: Callable[[], None]) -> None:
-        """Register a callback fired (in the writer's thread) after a commit that queued upload rows."""
-        self._listeners.append(callback)
-
-    def _notify(self) -> None:
-        for callback in tuple(self._listeners):
-            try:
-                callback()
-            except Exception:  # noqa: BLE001 - a wake-up hook must never fail a local write
-                pass
 
     # ---- migrations ----------------------------------------------------------------------------
     def _migrate(self) -> None:
@@ -149,7 +143,7 @@ class FlowStore:
                         WHERE sequence IS NULL""")
                     db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_flow_observations_session_sequence "
                                "ON flow_observations(session_id, sequence)")
-                    for statement in _V2_SYNC.split(";"):
+                    for statement in _V2_SCHEMA.split(";"):
                         if statement.strip():
                             db.execute(statement)
                 if version < SCHEMA_VERSION:
@@ -169,23 +163,6 @@ class FlowStore:
     def _json(value: dict[str, Any]) -> str:
         return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
-    # ---- outbox hooks --------------------------------------------------------------------------
-    def enqueue(self, entity_type: str, entity_id: str, session_id: str, payload: dict[str, Any],
-                sequence: int | None = None) -> bool:
-        """Queue one upload row on its own transaction (entities that have no local table, e.g. tasks)."""
-        from .sync.outbox import enqueue
-        with self._tx() as db:
-            return enqueue(db, entity_type, entity_id, session_id, payload, sequence)
-
-    def enqueue_many(self, session_id: str, items: list[tuple[str, str, dict[str, Any], int | None]]) -> int:
-        """Queue several ``(entity_type, entity_id, payload, sequence)`` rows atomically; returns rows changed."""
-        from .sync.outbox import enqueue
-        changed = 0
-        with self._tx() as db:
-            for entity_type, entity_id, payload, sequence in items:
-                changed += int(enqueue(db, entity_type, entity_id, session_id, payload, sequence))
-        return changed
-
     # ---- sessions ------------------------------------------------------------------------------
     def save_session(self, session: WorkSession, sync: bool = False) -> None:
         with self._tx() as db:
@@ -198,11 +175,6 @@ class FlowStore:
               session.started_at.isoformat(), session.updated_at.isoformat(),
               session.ended_at.isoformat() if session.ended_at else None, session.created_by,
               self._json(session.metadata)))
-            if sync:
-                from .sync import payloads
-                from .sync.outbox import enqueue
-                enqueue(db, "session", session.id, session.id, payloads.session_payload(session))
-
     def get_session(self, session_id: str) -> WorkSession | None:
         with self._read() as db:
             row = db.execute("SELECT * FROM flow_sessions WHERE id=?", (session_id,)).fetchone()
@@ -238,11 +210,6 @@ class FlowStore:
                 observation.app_name, observation.window_title, observation.activity_summary,
                 observation.category.value, observation.goal_alignment, observation.progress_signal,
                 observation.confidence, self._json(observation.metadata), sequence))
-            if sync:
-                from .sync import payloads
-                from .sync.outbox import enqueue
-                enqueue(db, "observation", observation.id, observation.session_id,
-                        payloads.observation_payload(observation), sequence)
         return observation
 
     @staticmethod
@@ -273,12 +240,6 @@ class FlowStore:
             db.execute("INSERT INTO flow_interventions VALUES (?,?,?,?,?,?,?,?)", (
                 intervention.id, intervention.session_id, intervention.timestamp.isoformat(), intervention.reason,
                 intervention.channel.value, intervention.message, intervention.status.value, self._json(intervention.metadata)))
-            if sync:
-                from .sync import payloads
-                from .sync.outbox import enqueue
-                enqueue(db, "intervention", intervention.id, intervention.session_id,
-                        payloads.intervention_payload(intervention))
-
     def list_interventions(self, session_id: str) -> list[Intervention]:
         with self._read() as db:
             rows = db.execute("SELECT * FROM flow_interventions WHERE session_id=? ORDER BY timestamp,id", (session_id,)).fetchall()
@@ -302,10 +263,6 @@ class FlowStore:
             item = FlowEvent(event_id, event_type, session_id, stamp, sequence, data)
             db.execute("INSERT INTO flow_events VALUES (?,?,?,?,?,?)", (item.event_id, item.session_id, item.type,
                        item.timestamp.isoformat(), item.sequence, self._json(item.data)))
-            if sync:
-                from .sync import payloads
-                from .sync.outbox import enqueue
-                enqueue(db, "event", item.event_id, session_id, payloads.event_payload(item), sequence)
         return item
 
     def save_event(self, item: FlowEvent, sync: bool = False) -> None:
@@ -313,11 +270,6 @@ class FlowStore:
         with self._tx() as db:
             db.execute("INSERT INTO flow_events VALUES (?,?,?,?,?,?)", (item.event_id, item.session_id, item.type,
                        item.timestamp.isoformat(), item.sequence, self._json(item.data)))
-            if sync:
-                from .sync import payloads
-                from .sync.outbox import enqueue
-                enqueue(db, "event", item.event_id, item.session_id, payloads.event_payload(item), item.sequence)
-
     @staticmethod
     def _event(row: sqlite3.Row) -> FlowEvent:
         return FlowEvent(row["event_id"], row["type"], row["session_id"], datetime.fromisoformat(row["timestamp"]),
@@ -340,17 +292,11 @@ class FlowStore:
             row = db.execute("SELECT COALESCE(MAX(sequence), 0) + 1 FROM flow_events WHERE session_id=?", (session_id,)).fetchone()
         return int(row[0])
 
-    # ---- sync state (shared between the CLI and the daemon through the database) -----------------
-    def set_state(self, key: str, value: dict[str, Any]) -> None:
-        with self._tx() as db:
-            db.execute("""INSERT INTO sync_state(key,value,updated_at) VALUES (?,?,?)
-                          ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at""",
-                       (key, json.dumps(value, sort_keys=True), datetime.now(timezone.utc).isoformat()))
+    # Compatibility no-ops: cloud synchronization is optional and its durable
+    # outbox is owned by the remote package when that package is installed.
+    def enqueue(self, entity_type: str, entity_id: str, session_id: str, payload: dict[str, Any],
+                sequence: int | None = None) -> bool:
+        return False
 
-    def get_state(self, key: str) -> dict[str, Any]:
-        with self._read() as db:
-            row = db.execute("SELECT value FROM sync_state WHERE key=?", (key,)).fetchone()
-        try:
-            return json.loads(row[0]) if row else {}
-        except json.JSONDecodeError:
-            return {}
+    def enqueue_many(self, session_id: str, items: list[tuple[str, str, dict[str, Any], int | None]]) -> int:
+        return 0

@@ -50,7 +50,12 @@ class SessionManager:
     def from_environment(cls, store: FlowStore | None = None, hub: EventHub | None = None,
                          scorer: ScoringEngine | None = None) -> "SessionManager":
         """Production wiring: realistic drift threshold, and cloud sync only while signed in."""
-        from .sync.state import cloud_sync_enabled
+        try:
+            from .sync.state import cloud_sync_enabled
+        except ModuleNotFoundError:
+            # The local-only distribution intentionally has no cloud sync
+            # package; that must not prevent the daemon from starting.
+            cloud_sync_enabled = lambda: False
         return cls(store, hub, scorer or ScoringEngine(drift_duration_seconds=drift_seconds()),
                    cloud_sync=cloud_sync_enabled())
 

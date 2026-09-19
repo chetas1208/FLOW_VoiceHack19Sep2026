@@ -1,113 +1,89 @@
-"""Credential storage.
+"""Secure storage for the daemon's long-term secrets.
 
-The secret material is a single JSON *bundle*::
+FLOW has no accounts and no cloud tokens. The daemon owns two secrets that must survive restarts and must never
+sit in a world-readable file or on a command line:
 
-    {access_token, access_expires_at, refresh_token, refresh_expires_at, user{id,email}, device_id, api_url}
+* ``identity_ed25519`` - the private half of the daemon's Ed25519 identity (browsers pin its fingerprint);
+* ``jwt_signing_secret`` - the HMAC key that signs the short-lived access tokens it issues to paired browsers.
 
 Backends, strongest first:
 
-* ``KeyringCredentialStore`` - the ``keyring`` package: macOS Keychain through the Security framework
-  (nothing secret ever appears on a command line), or a usable Linux Secret Service.
-* ``MacKeychainCredentialStore`` - the ``security`` CLI, only when ``keyring`` is unusable. Weaker: the
-  secret passes through a helper process (kept off argv by feeding ``security -i`` on stdin).
-* ``FileCredentialStore`` - a 0600 file, the Linux fallback (``flow doctor`` warns about it) and the test backend.
-
-Non-secret account facts (email, device name, API URL) live in ``account.json`` (0600). Bearer and refresh
-tokens are **never** written to ``config.json`` or ``account.json``.
+* ``KeyringSecretStore`` - the ``keyring`` package: the macOS Keychain through the Security framework (or a usable
+  Linux Secret Service). Secrets go straight to the OS API; nothing is ever passed on argv.
+* ``FileSecretStore`` - a 0600 JSON file in a 0700 directory, written atomically. The Linux/headless fallback;
+  ``flow doctor`` reports it as weaker than a keychain.
+* ``MemorySecretStore`` - tests.
 """
 
 from __future__ import annotations
 
-import getpass
+import base64
+import hashlib
 import json
 import os
 import platform
-import subprocess
+import secrets
 import tempfile
-from datetime import datetime, timedelta, timezone
+import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Callable, Protocol
 
-SERVICE = "ai.flow.cli"
-ACCOUNT_KEYS = ("email", "user_id", "device_name", "device_id", "api_url", "logged_in_at")
+try:  # POSIX only; FLOW targets macOS and Linux
+    import fcntl
+except ImportError:  # pragma: no cover
+    fcntl = None  # type: ignore[assignment]
+
+SERVICE = "ai.flow.daemon"
+IDENTITY_KEY = "identity_ed25519"
+SIGNING_KEY = "jwt_signing_secret"
 
 
-class CredentialStoreError(RuntimeError):
+class SecretStoreError(RuntimeError):
     pass
 
 
-class CredentialStore(Protocol):
-    def save_token(self, token: str, refresh_token: str | None = None) -> None: ...
-    def get_token(self) -> str | None: ...
-    def get_refresh_token(self) -> str | None: ...
-    def delete_token(self) -> None: ...
-    def load_bundle(self) -> dict[str, Any] | None: ...
-    def save_bundle(self, bundle: dict[str, Any]) -> None: ...
+class SecretStore(Protocol):
+    backend: str
+    secure: bool
+    description: str
+
+    def get(self, name: str) -> str | None: ...
+    def set(self, name: str, value: str) -> None: ...
+    def delete(self, name: str) -> None: ...
 
 
-# ---- bundle helpers -----------------------------------------------------------------------------
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
+class MemorySecretStore:
+    backend, secure, description = "memory", False, "in-process memory (tests)"
+
+    def __init__(self) -> None:
+        self._values: dict[str, str] = {}
+
+    def get(self, name: str) -> str | None:
+        return self._values.get(name)
+
+    def set(self, name: str, value: str) -> None:
+        self._values[name] = value
+
+    def delete(self, name: str) -> None:
+        self._values.pop(name, None)
 
 
-def parse_time(value: Any) -> datetime | None:
-    if not value:
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
-
-
-def new_bundle(response: dict[str, Any], *, device_id: str, api_url: str, now: datetime | None = None) -> dict[str, Any]:
-    """Build a bundle from a ``/v1/cli/auth/token`` or ``/v1/auth/refresh`` response."""
-    now = now or _now()
-    user = response.get("user") or {}
-    bundle: dict[str, Any] = {
-        "access_token": response["access_token"],
-        "access_expires_at": (now + timedelta(seconds=int(response.get("expires_in", 900)))).isoformat(),
-        "refresh_token": response.get("refresh_token"),
-        "user": {"id": user.get("id"), "email": user.get("email")},
-        "device_id": device_id, "api_url": api_url.rstrip("/")}
-    if response.get("refresh_expires_in"):
-        bundle["refresh_expires_at"] = (now + timedelta(seconds=int(response["refresh_expires_in"]))).isoformat()
-    return bundle
-
-
-def access_is_fresh(bundle: dict[str, Any], skew: float = 60.0, now: datetime | None = None) -> bool:
-    """True if the access token is usable for at least ``skew`` more seconds (no expiry recorded = static token)."""
-    if not bundle.get("access_token"):
-        return False
-    expires = parse_time(bundle.get("access_expires_at"))
-    return expires is None or (expires - (now or _now())).total_seconds() > skew
-
-
-# ---- shared implementation ----------------------------------------------------------------------
-class _BundleStore:
-    backend = "abstract"
-    secure = True
-    description = ""
-
-    def _read_raw(self) -> dict[str, Any] | None:  # pragma: no cover - interface
-        raise NotImplementedError
-
-    def _write_raw(self, bundle: dict[str, Any]) -> None:  # pragma: no cover - interface
-        raise NotImplementedError
-
-    def _delete_raw(self) -> None:  # pragma: no cover - interface
-        raise NotImplementedError
+class _LegacyCredentialMixin:
+    """Compatibility surface for the original CLI token bundle API."""
 
     def load_bundle(self) -> dict[str, Any] | None:
-        raw = self._read_raw()
-        if not isinstance(raw, dict):
+        value = self.get("credential_bundle")
+        if not value:
             return None
-        if "access_token" not in raw and "token" in raw:  # pre-bundle layout
-            raw = {"access_token": raw["token"], "refresh_token": raw.get("refresh_token")}
-        return raw or None
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
 
     def save_bundle(self, bundle: dict[str, Any]) -> None:
-        self._write_raw(dict(bundle))
+        self.set("credential_bundle", json.dumps(bundle, sort_keys=True))
 
     def save_token(self, token: str, refresh_token: str | None = None) -> None:
         self.save_bundle({"access_token": token, "refresh_token": refresh_token})
@@ -119,29 +95,13 @@ class _BundleStore:
         return (self.load_bundle() or {}).get("refresh_token")
 
     def delete_token(self) -> None:
-        self._delete_raw()
+        self.delete("credential_bundle")
 
     clear = delete_token
 
 
-class MemoryCredentialStore(_BundleStore):
-    backend, description = "memory", "in-process memory (tests)"
-
-    def __init__(self) -> None:
-        self._bundle: dict[str, Any] | None = None
-
-    def _read_raw(self):
-        return dict(self._bundle) if self._bundle else None
-
-    def _write_raw(self, bundle):
-        self._bundle = bundle
-
-    def _delete_raw(self):
-        self._bundle = None
-
-
-def _atomic_private_write(path: Path, data: str) -> None:
-    """Write ``data`` to ``path`` with mode 0600 via an atomic rename (never briefly world-readable)."""
+def atomic_private_write(path: Path, data: str) -> None:
+    """Write ``data`` to ``path`` (mode 0600, parent 0700) through an atomic rename: never briefly readable by others."""
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         os.chmod(path.parent, 0o700)
@@ -163,37 +123,45 @@ def _atomic_private_write(path: Path, data: str) -> None:
         raise
 
 
-class FileCredentialStore(_BundleStore):
-    """0600 JSON file. Test/development backend and the Linux fallback when no keyring is usable."""
-
+class FileSecretStore:
     backend, secure = "file", False
     description = "0600 file (weaker than an OS keychain)"
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path).expanduser()
 
-    def _read_raw(self):
+    def _read(self) -> dict[str, str]:
         try:
             data = json.loads(self.path.read_text())
         except (FileNotFoundError, json.JSONDecodeError, OSError):
-            return None
-        return data if isinstance(data, dict) else None
+            return {}
+        return data if isinstance(data, dict) else {}
 
-    def _write_raw(self, bundle):
-        _atomic_private_write(self.path, json.dumps(bundle))
+    def get(self, name: str) -> str | None:
+        value = self._read().get(name)
+        return value if isinstance(value, str) else None
 
-    def _delete_raw(self):
-        self.path.unlink(missing_ok=True)
+    def set(self, name: str, value: str) -> None:
+        values = self._read()
+        values[name] = value
+        atomic_private_write(self.path, json.dumps(values))
+
+    def delete(self, name: str) -> None:
+        values = self._read()
+        if values.pop(name, None) is not None:
+            if values:
+                atomic_private_write(self.path, json.dumps(values))
+            else:
+                self.path.unlink(missing_ok=True)
 
 
-class KeyringCredentialStore(_BundleStore):
-    """``keyring`` package: macOS Keychain via the Security framework, or a Linux Secret Service."""
+class KeyringSecretStore:
+    """``keyring``: macOS Keychain via the Security framework (or a Linux Secret Service)."""
 
-    backend = "keyring"
+    backend, secure = "keyring", True
 
-    def __init__(self, service: str = SERVICE, username: str | None = None, keyring_module: Any = None) -> None:
+    def __init__(self, service: str = SERVICE, keyring_module: Any = None) -> None:
         self.service = service
-        self.username = username or _username()
         if keyring_module is None:
             import keyring as keyring_module  # noqa: PLW0127
         self._keyring = keyring_module
@@ -202,84 +170,36 @@ class KeyringCredentialStore(_BundleStore):
     def description(self) -> str:  # type: ignore[override]
         return "macOS Keychain (Security framework)" if platform.system() == "Darwin" else "OS keyring"
 
-    def _read_raw(self):
+    def get(self, name: str) -> str | None:
         try:
-            raw = self._keyring.get_password(self.service, self.username)
-        except Exception:  # noqa: BLE001 - a locked/unavailable keychain reads as "no credentials"
-            return None
-        try:
-            return json.loads(raw) if raw else None
-        except json.JSONDecodeError:
-            return None
+            return self._keyring.get_password(self.service, name)
+        except Exception as exc:  # noqa: BLE001 - a locked keychain must not look like "no secret" and trigger re-keying
+            raise SecretStoreError(f"could not read {name!r} from the system keychain: {exc}") from exc
 
-    def _write_raw(self, bundle):
+    def set(self, name: str, value: str) -> None:
         try:
-            self._keyring.set_password(self.service, self.username, json.dumps(bundle))
+            self._keyring.set_password(self.service, name, value)
         except Exception as exc:  # noqa: BLE001
-            raise CredentialStoreError(f"could not write to the system keychain: {exc}") from exc
+            raise SecretStoreError(f"could not write {name!r} to the system keychain: {exc}") from exc
 
-    def _delete_raw(self):
+    def delete(self, name: str) -> None:
         try:
-            self._keyring.delete_password(self.service, self.username)
-        except Exception:  # noqa: BLE001 - nothing stored, or already gone
+            self._keyring.delete_password(self.service, name)
+        except Exception:  # noqa: BLE001 - already absent
             pass
 
 
-class MacKeychainCredentialStore(_BundleStore):
-    """``security`` CLI fallback (weaker than ``keyring``).
-
-    Secrets are never placed on argv: commands are fed to ``security -i`` on stdin with the payload
-    hex-encoded (``-X``). The payload is still handled by a helper process, hence "weaker".
-    """
-
-    backend, secure = "security-cli", False
-    description = "macOS Keychain via the `security` CLI (weaker fallback; install the `keyring` package)"
-
-    def __init__(self, service: str = SERVICE, username: str | None = None) -> None:
-        self.service, self.username = service, username or _username()
-
-    def _run(self, *args: str) -> str | None:
-        result = subprocess.run(["security", *args], text=True, capture_output=True, check=False)
-        return result.stdout.strip() if result.returncode == 0 else None
-
-    def _interactive(self, command: str) -> bool:
-        result = subprocess.run(["security", "-i"], input=command + "\n", text=True, capture_output=True, check=False)
-        return result.returncode == 0
-
-    def _read_raw(self):
-        raw = self._run("find-generic-password", "-a", self.username, "-s", self.service, "-w")
-        if not raw:
-            return None
-        try:  # `-w` prints hex when the stored bytes are not printable
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            try:
-                return json.loads(bytes.fromhex(raw).decode())
-            except (ValueError, json.JSONDecodeError):
-                return None
-
-    def _write_raw(self, bundle):
-        payload = json.dumps(bundle).encode().hex()
-        if not self._interactive(f"add-generic-password -a {_q(self.username)} -s {_q(self.service)} -X {payload} -U"):
-            raise CredentialStoreError("could not write to the macOS Keychain with the security CLI")
-
-    def _delete_raw(self):
-        self._run("delete-generic-password", "-a", self.username, "-s", self.service)
+# Public aliases retained for callers written against the first FLOW CLI.
+class MemoryCredentialStore(_LegacyCredentialMixin, MemorySecretStore):
+    pass
 
 
-def _q(value: str) -> str:
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
-
-
-def _username() -> str:
-    try:
-        return getpass.getuser()
-    except Exception:  # noqa: BLE001
-        return "flow"
+class FileCredentialStore(_LegacyCredentialMixin, FileSecretStore):
+    pass
 
 
 def keyring_usable() -> bool:
-    """A real keyring backend (not the ``fail``/``null`` placeholders) is available."""
+    """A real keyring backend (not the ``fail``/``null`` placeholders) is available on this host."""
     try:
         import keyring
         from keyring.backends import fail
@@ -287,43 +207,104 @@ def keyring_usable() -> bool:
         if isinstance(backend, fail.Keyring) or type(backend).__module__.endswith(".null"):
             return False
         return float(backend.priority) > 0
-    except Exception:  # noqa: BLE001 - not installed, or no viable backend on this host
+    except Exception:  # noqa: BLE001 - not installed, or no viable backend
         return False
 
 
-def default_credential_store(config_dir: Path | None = None) -> CredentialStore:
-    """Pick the strongest available backend. ``FLOW_CREDENTIAL_BACKEND`` (keyring|security|file) forces one."""
+def default_secret_store(config_dir: Path | None = None) -> SecretStore:
+    """Strongest available backend. ``FLOW_SECRET_BACKEND`` (``keyring`` | ``file``) forces one."""
     directory = Path(config_dir) if config_dir else Path.home() / ".config" / "flow"
-    forced = os.getenv("FLOW_CREDENTIAL_BACKEND", "auto").strip().lower()
+    forced = os.getenv("FLOW_SECRET_BACKEND", "auto").strip().lower()
     if forced == "file":
-        return FileCredentialStore(directory / "credentials.json")
-    if forced == "security":
-        return MacKeychainCredentialStore()
+        return FileSecretStore(directory / "secrets.json")
     if forced == "keyring" or keyring_usable():
-        return KeyringCredentialStore()
-    if platform.system() == "Darwin":
-        return MacKeychainCredentialStore()
-    return FileCredentialStore(directory / "credentials.json")
+        return KeyringSecretStore()
+    return FileSecretStore(directory / "secrets.json")
 
 
-# ---- non-secret account info --------------------------------------------------------------------
-def account_path(config_dir: Path) -> Path:
-    return Path(config_dir) / "account.json"
+def describe_secret_store(store: SecretStore) -> dict[str, Any]:
+    return {"backend": store.backend, "secure": store.secure, "description": store.description}
 
 
-def save_account(config_dir: Path, info: dict[str, Any]) -> None:
-    """Persist non-secret account facts. Only whitelisted keys are written; tokens can never land here."""
-    clean = {key: info[key] for key in ACCOUNT_KEYS if info.get(key) is not None}
-    _atomic_private_write(account_path(config_dir), json.dumps(clean, indent=2))
+# ---- get-or-create (race-safe across the CLI and the daemon) ------------------------------------
+class _FileLock:
+    def __init__(self, path: Path, timeout: float = 10.0) -> None:
+        self.path, self.timeout, self._fd = path, timeout, None
+
+    def __enter__(self) -> "_FileLock":
+        if fcntl is None:  # pragma: no cover
+            return self
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._fd = os.open(self.path, os.O_CREAT | os.O_RDWR, 0o600)
+        deadline = time.monotonic() + self.timeout
+        while True:
+            try:
+                fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return self
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    os.close(self._fd)
+                    raise SecretStoreError("timed out waiting for the FLOW secrets lock") from None
+                time.sleep(0.02)
+
+    def __exit__(self, *exc: Any) -> None:
+        if self._fd is not None:
+            os.close(self._fd)  # closing drops the flock
+            self._fd = None
 
 
-def load_account(config_dir: Path) -> dict[str, Any]:
+def get_or_create_secret(store: SecretStore, name: str, factory: Callable[[], str],
+                         lock_path: Path | None = None) -> str:
+    """Return the stored secret or create it exactly once, even if two FLOW processes start together."""
+    existing = store.get(name)
+    if existing:
+        return existing
+    from .config import config_dir
+    with _FileLock(lock_path or config_dir() / "secrets.lock"):
+        existing = store.get(name)  # somebody else may have created it while we waited
+        if existing:
+            return existing
+        value = factory()
+        store.set(name, value)
+        return value
+
+
+def signing_secret(store: SecretStore, lock_path: Path | None = None) -> bytes:
+    """The daemon's 256-bit HMAC key for access-token JWTs."""
+    encoded = get_or_create_secret(store, SIGNING_KEY, lambda: base64.urlsafe_b64encode(secrets.token_bytes(32)).decode(),
+                                   lock_path)
+    return base64.urlsafe_b64decode(encoded.encode())
+
+
+@dataclass(frozen=True, slots=True)
+class DaemonIdentity:
+    """Long-term Ed25519 identity. ``fingerprint`` = lowercase hex SHA-256 of the raw 32-byte public key."""
+    private_key: Any
+    public_key_raw: bytes
+    fingerprint: str
+
+    @property
+    def fingerprint_display(self) -> str:
+        return ":".join(self.fingerprint[i:i + 4] for i in range(0, len(self.fingerprint), 4)).upper()
+
+    def sign(self, message: bytes) -> bytes:
+        return self.private_key.sign(message)
+
+
+def load_or_create_identity(store: SecretStore, lock_path: Path | None = None) -> DaemonIdentity:
+    """Load the daemon's Ed25519 identity, generating and persisting it on first use (needs ``cryptography``)."""
     try:
-        data = json.loads(account_path(config_dir).read_text())
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return {}
-    return data if isinstance(data, dict) else {}
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    except ImportError as exc:  # pragma: no cover
+        raise SecretStoreError("the `cryptography` package is required for the daemon identity") from exc
 
+    def create() -> str:
+        raw = Ed25519PrivateKey.generate().private_bytes(
+            serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption())
+        return base64.urlsafe_b64encode(raw).decode()
 
-def clear_account(config_dir: Path) -> None:
-    account_path(config_dir).unlink(missing_ok=True)
+    encoded = get_or_create_secret(store, IDENTITY_KEY, create, lock_path)
+    key = Ed25519PrivateKey.from_private_bytes(base64.urlsafe_b64decode(encoded.encode()))
+    public = key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    return DaemonIdentity(key, public, hashlib.sha256(public).hexdigest())

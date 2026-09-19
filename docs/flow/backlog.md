@@ -14,14 +14,18 @@
 - Versioned cloud client with client metadata and idempotency keys.
 - Intervention confidence threshold and cooldown policy.
 - Optional Kokoro adapter and voice CLI commands.
+- Portable daemon session lifecycle commands (`session.start`, `status`, `pause`,
+  `resume`, `stop`, and `session.list`) with explicit unavailable-capability status.
+- `flow doctor` plus persisted voice enable/mute controls.
 - Kubernetes API deployment design and local CI script.
 
 ## Next implementation order
 
 1. macOS native bridge: ScreenCaptureKit permission state, active-window metadata,
    display selection, and actual ephemeral frame delivery.
-2. Local daemon session runtime: start/stop observer loop, restart recovery,
-   sampler scheduling, local queue flush, and Ctrl-C detach behavior.
+2. Local daemon session runtime: observer worker ownership, restart recovery,
+   sampler scheduling, local queue flush, and Ctrl-C detach behavior. The daemon
+   lifecycle control surface is complete; worker ownership remains open.
 3. Local redaction implementation using conservative OCR/region providers and
    explicit screenshot TTL handling for opt-in debugging.
 4. Kokoro model cache/checksum management and platform audio playback.

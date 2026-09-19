@@ -17,7 +17,7 @@ class VoiceAgent:
     def message_for(self, state: EfficiencyState, drift_seconds: float) -> str | None:
         if state.recommendation == Recommendation.FLAG_POSSIBLE_BLOCKER and state.blocker:
             return f"You may be stuck on {state.blocker}. Consider checking the unresolved error before switching tasks."
-        if state.drift_state in {"drifting", "sustained_drift"}:
+        if state.drift_state in {"possible_drift", "drifting", "sustained_drift"}:
             return self.policy.message(state.last_high_alignment_task, drift_seconds)
         return None
 

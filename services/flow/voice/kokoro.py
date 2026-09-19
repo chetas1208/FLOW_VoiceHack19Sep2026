@@ -17,6 +17,18 @@ class KokoroVoiceEngine:
         self.player = player or self._play_system
         self._pipeline = None
 
+    def status(self) -> dict[str, str | None]:
+        """Report readiness without importing the optional runtime or producing audio."""
+        if not self.model_root.is_dir():
+            return {"status": "missing", "reason": "model missing; run: flow models install voice",
+                    "model_path": str(self.model_root)}
+        try:
+            import kokoro  # noqa: F401
+        except ImportError:
+            return {"status": "not_configured", "reason": "install FLOW voice support with: pip install 'flow-agent[voice]'",
+                    "model_path": str(self.model_root)}
+        return {"status": "ready", "reason": None, "model_path": str(self.model_root)}
+
     def load(self) -> None:
         if self._pipeline is not None:
             return

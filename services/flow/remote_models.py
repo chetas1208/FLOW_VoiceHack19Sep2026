@@ -101,6 +101,7 @@ class CommandType(str, Enum):
     FEEDBACK_RECOMMENDATION = "FEEDBACK_RECOMMENDATION"
     SET_PERMISSION_POLICY = "SET_PERMISSION_POLICY"
     UPDATE_SUBTASKS = "UPDATE_SUBTASKS"
+    ROLLBACK_TASK = "ROLLBACK_TASK"
 
 
 class CommandSource(str, Enum):
@@ -136,7 +137,7 @@ COMMAND_TTL_SECONDS = {
     CommandType.STOP: 3600, CommandType.PAUSE: 3600, CommandType.RESUME: 600,
     CommandType.MUTE_VOICE: 3600, CommandType.UNMUTE_VOICE: 3600,
     CommandType.DISMISS_RECOMMENDATION: 600, CommandType.FEEDBACK_RECOMMENDATION: 600,
-    CommandType.SET_PERMISSION_POLICY: 600, CommandType.UPDATE_SUBTASKS: 600}
+    CommandType.SET_PERMISSION_POLICY: 600, CommandType.UPDATE_SUBTASKS: 600, CommandType.ROLLBACK_TASK: 600}
 
 
 def default_expiry(command_type: CommandType, now: datetime | None = None) -> datetime:
@@ -165,9 +166,12 @@ class SessionCommand(Model):
 class PermissionLevel(str, Enum):
     READ_ONLY = "read_only"
     SAFE_EXECUTE = "safe_execute"
-    WRITE_PROJECT = "write_project"
+    WRITE_PROJECT = "write_project"  # a.k.a. WRITE_WORKSPACE
     EXTERNAL_NETWORK = "external_network"
     DESTRUCTIVE = "destructive"
+
+
+PermissionLevel.WRITE_WORKSPACE = PermissionLevel.WRITE_PROJECT  # type: ignore[attr-defined]
 
 
 class PermissionPolicy(str, Enum):
@@ -251,6 +255,14 @@ class RecommendationType(str, Enum):
     REDUCE_CONTEXT_SWITCHING = "REDUCE_CONTEXT_SWITCHING"
     TAKE_SHORT_BREAK = "TAKE_SHORT_BREAK"
     DELEGATE_TASK = "DELEGATE_TASK"
+    CONTINUE = "CONTINUE"
+    INSPECT_ERROR = "INSPECT_ERROR"
+    RUN_TEST = "RUN_TEST"
+    RUN_FULL_VALIDATION = "RUN_FULL_VALIDATION"
+    READ_RELEVANT_DOCS = "READ_RELEVANT_DOCS"
+    DELEGATE_SUBTASK = "DELEGATE_SUBTASK"
+    PAUSE_AND_REASSESS = "PAUSE_AND_REASSESS"
+    COMPLETE_SESSION = "COMPLETE_SESSION"
 
 
 class ActionLevel(str, Enum):
@@ -288,6 +300,9 @@ class ActionRecommendation(Model):
     expires_at: datetime | None = None
     feedback: str | None = None
     revision: int = 1
+    action: str = ""
+    priority: int = 50
+    tool_plan: list[dict[str, Any]] = field(default_factory=list)
 
 
 # ---- goal ---------------------------------------------------------------------------------------

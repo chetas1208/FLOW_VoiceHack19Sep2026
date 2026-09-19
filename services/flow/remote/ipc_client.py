@@ -1,24 +1,24 @@
-"""CLI side of the local daemon IPC, plus the cloud command fallback.
+"""CLI side of the local daemon IPC.
 
-Local-first: every command goes to the daemon over ``config_dir/flow.sock`` (JSON lines, see ``ipc_protocol``).
-The cloud command API (``POST /v1/commands``, ``source=cli``) is used only when
+The daemon on the user's Mac is the only backend: every command goes to it over ``config_dir/flow.sock`` (JSON
+lines, see ``ipc_protocol``); remote/web clients reach the same handlers through the daemon's HTTP API, so the CLI
+and the web cannot diverge (both end in the same ``SessionCommand``). Nothing here reads observation text: command
+arguments come from the user's argv or their explicit prompt answers.
 
-* the daemon is not reachable and the user is signed in, or
-* the daemon says the session is not one of its own (``not_found``) and the user is signed in
-  (a session running on another of the user's devices).
+IPC command arguments used by the CLI (all session-scoped commands accept an optional ``session_id``)::
 
-Both paths issue the same ``SessionCommand`` types, so the web and the CLI cannot diverge. Nothing here reads
-observation text: command arguments come from the user's argv or their explicit prompt answers.
-
-IPC command arguments used by the CLI (all accept an optional ``session_id``)::
-
-    session.start {goal, permission_policy}      session.stop|pause|resume|status {}     session.list {status?}
+    session.start {goal, permission_policy}      session.stop|pause|resume|status {}     session.list {}
     task.add {instruction, permission_level?}    task.list {}   task.show {task_id}      task.cancel {task_id}
+    task.rollback {task_id}
     approval.list {}                             approval.resolve {approval_id, approve: bool}
-    recommend.get {}                             recommend.do {recommendation_id?}
-    ask {question}                               goal.get {}    goal.set {goal}
-    voice.mute {minutes?}   voice.unmute {}      subtasks.set {subtasks: [{id?, title, status}]}
-    events.subscribe {after?}                    ping {}        status {}
+    recommend.get {}                             recommend.do {recommendation_id}
+    ask {question}                               goal.get {}    goal.set {goal}         goal.confirm {}
+    voice.mute {minutes?}   voice.unmute {}      voice.on {}    voice.off {}
+    subtasks.set {subtasks: [{id?, title, status}]}
+    permissions.allow_write {}                   permissions.set_policy {policy}
+    remote.status {}  remote.enable {public}  remote.disable {}  remote.pair {public}  remote.clients {}
+    remote.revoke {client_id}
+    events.subscribe {session_id, replay?}       ping {}        status {}
 """
 
 from __future__ import annotations
@@ -184,189 +184,19 @@ def ensure_daemon(wait: float = 8.0, spawn: Callable[[], None] | None = None) ->
     raise DaemonUnavailable("the FLOW daemon did not become ready. Check it with: flow daemon status")
 
 
-# ---- cloud fallback ----------------------------------------------------------------------------------
-def make_cloud():
-    """A ``CloudClient`` when this device is signed in and cloud use is allowed, else ``None`` (patched in tests)."""
-    if cloud_sync_disabled():
-        return None
-    from ..commands._common import credential_store, make_client
-    store = credential_store()
-    try:
-        if not store.load_bundle():
-            return None
-    except Exception:  # noqa: BLE001 - a locked keychain reads as signed out
-        return None
-    return make_client(store)
-
-
-def is_logged_in() -> bool:
-    return make_cloud() is not None
-
-
-def _run_cloud(coro_factory):
-    from ..commands._common import run_client
-    client = make_cloud()
-    if client is None:
-        raise CloudFallbackUnavailable(NOT_SIGNED_IN_HELP)
-    from ..cloud.errors import CloudError, CloudRejected, CloudUnauthorized, CloudUnavailable
-    try:
-        return run_client(client, coro_factory)
-    except CloudUnauthorized as exc:
-        raise CloudFallbackUnavailable(str(exc)) from exc
-    except CloudUnavailable as exc:
-        raise CloudFallbackUnavailable(f"FLOW cloud is unreachable: {exc}") from exc
-    except CloudRejected as exc:
-        raise IpcError(str(exc), exc.code or "failed") from exc
-    except CloudError as exc:
-        raise IpcError(str(exc)) from exc
-
-
-def _minutes(args: dict[str, Any]) -> dict[str, Any]:
-    return {"minutes": int(args["minutes"])} if args.get("minutes") else {}
-
-
-# ipc command -> (SessionCommand type, payload builder). ``approval.resolve`` picks its type from ``approve``.
-CLOUD_WRITES: dict[str, tuple[str, Callable[[dict[str, Any]], dict[str, Any]]]] = {
-    "session.stop": ("STOP", lambda a: {}),
-    "session.pause": ("PAUSE", lambda a: {}),
-    "session.resume": ("RESUME", lambda a: {}),
-    "task.add": ("ADD_TASK", lambda a: {"instruction": a["instruction"],
-                                        **({"permission_level": a["permission_level"]} if a.get("permission_level") else {})}),
-    "task.cancel": ("CANCEL_TASK", lambda a: {"task_id": a["task_id"]}),
-    "approval.resolve": ("APPROVE_ACTION", lambda a: {"approval_id": a["approval_id"]}),
-    "recommend.do": ("EXECUTE_RECOMMENDATION", lambda a: {"recommendation_id": a.get("recommendation_id")}),
-    "ask": ("ASK", lambda a: {"question": a["question"]}),
-    "goal.set": ("UPDATE_GOAL", lambda a: {"goal": a["goal"]}),
-    "voice.mute": ("MUTE_VOICE", _minutes),
-    "voice.unmute": ("UNMUTE_VOICE", lambda a: {}),
-    "subtasks.set": ("UPDATE_SUBTASKS", lambda a: {"subtasks": a["subtasks"]}),
-}
-CLOUD_READS = {"session.list", "session.status", "task.list", "task.show", "approval.list", "recommend.get", "goal.get"}
-CLOUD_WAIT_SECONDS = {"ask": 45.0, "recommend.do": 20.0, "task.add": 20.0}
-DEFAULT_CLOUD_WAIT = 15.0
-POLL_INTERVAL = 0.6
-
-
-def cloud_supports(command: str) -> bool:
-    return command in CLOUD_WRITES or command in CLOUD_READS
-
-
-def _entity_data(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [dict(item.get("data") or item) for item in items]
-
-
-def cloud_call(command: str, args: dict[str, Any] | None = None, *, wait: float | None = None) -> Any:
-    """Run one IPC-shaped command through the cloud. Writes queue a ``SessionCommand`` and wait for its result."""
-    args = dict(args or {})
-    session_id = args.get("session_id")
-    if command in CLOUD_READS:
-        return _cloud_read(command, args, session_id)
-    if command not in CLOUD_WRITES:
-        raise CloudFallbackUnavailable(f"{command} is only available through the local daemon")
-    if not session_id:
-        raise IpcError("this needs a session id (see: flow sessions)", "bad_request")
-    ctype, build = CLOUD_WRITES[command]
-    if command == "approval.resolve" and args.get("approve") is False:
-        ctype = "DENY_ACTION"
-    if command == "recommend.do" and not args.get("recommendation_id"):
-        pending = _cloud_read("recommend.get", args, session_id)
-        rec = (pending or {}).get("recommendation") if isinstance(pending, dict) else None
-        if not rec:
-            raise IpcError("there is no pending recommendation for that session", NOT_FOUND)
-        args["recommendation_id"] = rec["id"]
-    payload = build(args)
-    timeout = wait if wait is not None else CLOUD_WAIT_SECONDS.get(command, DEFAULT_CLOUD_WAIT)
-
-    async def go(client):
-        created = await client.create_command(ctype, session_id=session_id, payload=payload, source="cli",
-                                              command_id=new_id("cmd"))
-        deadline = time.monotonic() + timeout
-        current = created
-        while CommandStatus(current.get("status", "queued")) not in TERMINAL_COMMAND_STATUSES:
-            if time.monotonic() >= deadline:
-                break
-            import asyncio
-            await asyncio.sleep(POLL_INTERVAL)
-            current = await client.get_command(created["command_id"])
-        return current
-
-    command_row = _run_cloud(go)
-    status = command_row.get("status")
-    result = command_row.get("result") or {}
-    if status in {"failed", "denied", "expired", "cancelled"}:
-        raise IpcError(str(result.get("error") or result.get("message") or f"command {status}"), status)
-    return {**(result if isinstance(result, dict) else {}), "via": "cloud", "command_id": command_row.get("command_id"),
-            "status": status, "session_id": session_id}
-
-
-def _cloud_read(command: str, args: dict[str, Any], session_id: str | None) -> Any:
-    if command == "session.list":
-        async def go(client):
-            return (await client.list_sessions(limit=100)).get("items", [])
-        return {"sessions": _run_cloud(go), "via": "cloud"}
-    if command == "approval.list":
-        async def go(client):
-            return (await client._request("GET", "/v1/approvals", params={"status": "pending"})).get("items", [])
-        return {"approvals": _entity_data(_run_cloud(go)), "via": "cloud"}
-    if not session_id:
-        raise IpcError("this needs a session id (see: flow sessions)", "bad_request")
-    if command in {"session.status", "goal.get"}:
-        async def go(client):
-            return await client._request("GET", f"/v1/sessions/{session_id}/live")
-        live = _run_cloud(go)
-        return {"goal": live.get("goal"), "via": "cloud"} if command == "goal.get" else {**live, "via": "cloud"}
-    kind = "recommendation" if command == "recommend.get" else "task"
-    params: dict[str, Any] = {"kind": kind, "limit": 100}
-    if command == "recommend.get":
-        params["status"] = "pending"
-
-    async def go(client):
-        return (await client._request("GET", f"/v1/sessions/{session_id}/entities", params=params)).get("items", [])
-    items = _entity_data(_run_cloud(go))
-    if command == "recommend.get":
-        best = max(items, key=lambda r: float(r.get("confidence") or 0), default=None)
-        return {"recommendation": best, "via": "cloud"}
-    if command == "task.show":
-        found = next((t for t in items if t.get("id") == args.get("task_id")), None)
-        if found is None:
-            raise IpcError(f"task not found: {args.get('task_id')}", NOT_FOUND)
-        return {"task": found, "via": "cloud"}
-    return {"tasks": items, "via": "cloud"}
-
-
-def cloud_events(session_id: str, after: int = 0, interval: float = 1.5) -> Iterator[tuple[str, dict[str, Any]]]:
-    """Poll the cloud event log (``GET /v1/sessions/{id}/events``) so ``flow attach`` works on a remote session."""
-    last = after
-    while True:
-        async def go(client, cursor=last):
-            return await client._request("GET", f"/v1/sessions/{session_id}/events",
-                                         params={"after": cursor, "limit": 100})
-        page = _run_cloud(go)
-        for item in sorted(page.get("items", []), key=lambda e: e.get("sequence", 0)):
-            last = max(last, item.get("sequence", 0))
-            yield "event", item
-        if not page.get("items"):
-            _sleep(interval)
-
-
 # ---- routing -----------------------------------------------------------------------------------------
 def dispatch(command: str, args: dict[str, Any] | None = None, *, session_id: str | None = None) -> Any:
-    """Send ``command`` to the local daemon; fall back to the cloud when that is the only way to reach it."""
+    """Send a command to the local daemon.
+
+    Cloud synchronization is intentionally not a hidden fallback: this client
+    only operates on the daemon that owns the local session.
+    """
     payload = dict(args or {})
     if session_id:
         payload["session_id"] = session_id
     try:
         return call(command, payload)
-    except DaemonUnavailable as unavailable:
-        if not cloud_supports(command) or command == "session.list":
-            raise
-        try:
-            return cloud_call(command, payload)
-        except CloudFallbackUnavailable as reason:
-            raise DaemonUnavailable(f"{unavailable}\n{reason}") from reason
-    except IpcError as exc:
-        if exc.code == NOT_FOUND and session_id and cloud_supports(command) and is_logged_in():
-            return cloud_call(command, payload)
+    except DaemonUnavailable:
         raise
 
 
@@ -393,23 +223,9 @@ def list_sessions(include_finished: bool = False) -> tuple[list[dict[str, Any]],
             item["where"] = "local"
             rows[item["id"]] = item
     except DaemonUnavailable:
-        notes.append("FLOW daemon is not running (start it with: flow daemon start); showing cloud sessions only.")
+        notes.append("FLOW daemon is not running (start it with: flow daemon start).")
     except IpcError as exc:
         notes.append(f"local sessions unavailable: {exc}")
-    try:
-        for item in _rows(cloud_call("session.list", {}), "sessions"):
-            merged = rows.get(item["id"])
-            if merged is None:
-                item["where"] = "cloud"
-                rows[item["id"]] = item
-            else:
-                for key in ("device_name", "device_id"):
-                    merged.setdefault(key, item.get(key))
-    except CloudFallbackUnavailable as exc:
-        if is_logged_in():
-            notes.append(str(exc))
-    except IpcError as exc:
-        notes.append(f"cloud sessions unavailable: {exc}")
     out = [r for r in rows.values() if include_finished or str(r.get("status")) not in NON_TERMINAL_HIDDEN]
     out.sort(key=lambda r: str(r.get("started_at") or ""), reverse=True)
     return out, notes

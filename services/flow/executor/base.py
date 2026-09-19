@@ -22,6 +22,7 @@ from ..remote_models import (
 
 MAX_INSTRUCTION_CHARS = 2000
 _AUTH_RE = re.compile(r"^[A-Za-z0-9_.:@/-]{3,120}$")
+_ACCEPTOR_RE = re.compile(r"^(?:user:[A-Za-z0-9_.@-]{1,80}|policy:safe_auto)$")
 # Origins an attacker-influenced data source could claim; never acceptable.
 _UNTRUSTED_ORIGIN_HINTS = ("observation", "screen", "ocr", "vision", "log", "window", "voice", "system", "tool")
 
@@ -42,6 +43,16 @@ class UntrustedText(str):
 
 def taint(value: str) -> UntrustedText:
     return UntrustedText(value)
+
+
+class ToolOutput(UntrustedText):
+    """Everything a tool returns (file contents, command output, evidence derived from them) is TOOL_OUTPUT data.
+
+    It is a plain string subclass so it prints and serialises normally, but it can never be turned into a
+    :class:`TrustedInstruction`: tool output is data to report on, never an instruction to follow.
+    """
+
+    __slots__ = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +119,14 @@ class ExecLimits:
     max_list_entries: int = 300
 
 
+class WriteRecorder(Protocol):
+    """Snapshots files around a write so the task can be rolled back (see ``checkpoint.py``)."""
+
+    def record_base(self, rel: str) -> None: ...
+
+    def record_after(self, rel: str) -> None: ...
+
+
 @dataclass(slots=True)
 class ToolContext:
     workdir: Path
@@ -116,6 +135,15 @@ class ToolContext:
     env_extra: dict[str, str] = field(default_factory=dict)
     previous_output: str = ""            # raw (redacted) output of the previous step, for read_logs(source=previous)
     previous_facts: dict[str, Any] = field(default_factory=dict)
+    recorder: WriteRecorder | None = None
+
+    def record_base(self, rel: str) -> None:
+        if self.recorder is not None:
+            self.recorder.record_base(rel)
+
+    def record_after(self, rel: str) -> None:
+        if self.recorder is not None:
+            self.recorder.record_after(rel)
 
 
 @dataclass(slots=True)
@@ -134,6 +162,10 @@ class ToolResult:
     files_touched: list[str] = field(default_factory=list)
     duration: float = 0.0
     timed_out: bool = False
+
+    def __post_init__(self) -> None:
+        self.output = ToolOutput(self.output)
+        self.summary = ToolOutput(self.summary)
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,5 +186,11 @@ class Tool(Protocol):
 
     def is_low_risk(self, args: dict[str, Any]) -> bool:
         """True when ``safe_auto`` may run this without asking."""
+
+    def classify(self, args: dict[str, Any]) -> tuple[PermissionLevel, str, bool]:
+        """(effective level, reason, unknown).  ``unknown`` = not on the allowlist: always needs explicit approval."""
+
+    def preview(self, args: dict[str, Any], ctx: ToolContext) -> str | None:
+        """For write tools: the proposed change (unified diff) shown in the approval prompt."""
 
     async def run(self, args: dict[str, Any], ctx: ToolContext) -> ToolResult: ...
