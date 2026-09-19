@@ -83,11 +83,11 @@ fi
 rm -rf "$ROOT/build"
 
 echo "==> writing SHA256SUMS and latest.json"
-"$PYTHON" - "$OUT" <<'PY'
+"$PYTHON" - "$OUT" "$ROOT" <<'PY'
 import hashlib, json, sys, zipfile
 from pathlib import Path
 
-out = Path(sys.argv[1])
+out, root = Path(sys.argv[1]), Path(sys.argv[2])
 wheels = sorted(out.glob("flow_agent-*.whl"))
 sdists = sorted(out.glob("flow_agent-*.tar.gz"))
 if len(wheels) != 1 or len(sdists) != 1:
@@ -111,8 +111,9 @@ with zipfile.ZipFile(wheel) as archive:
                  or n.startswith(("services/flowcloud/", "experiments/"))]
     if forbidden:
         raise SystemExit(f"wheel contains files that must not ship: {forbidden[:5]}")
-    ui_built = (out.parent / "services/flow/server/ui_dist/index.html").exists() if False else None
     has_ui = "services/flow/server/ui_dist/index.html" in names
+    if (root / "services/flow/server/ui_dist/index.html").exists() and not has_ui:
+        raise SystemExit("services/flow/server/ui_dist exists but is not in the wheel (package-data / __init__.py missing?)")
     print("embedded web UI in wheel: " + ("yes" if has_ui else "NO (built without frontend)"))
 
 digest = sha256(wheel)
@@ -141,14 +142,20 @@ if [ "$VERIFY" = 1 ]; then
   EXPECTED="$("$PYTHON" -c "import json,sys; print(json.load(open(sys.argv[1]))['version'])" "$OUT/latest.json")"
   [ "$VERSION_OUT" = "$EXPECTED" ] || { echo "flow version '$VERSION_OUT' != wheel version '$EXPECTED'" >&2; exit 1; }
   "$WORK/venv/bin/python" - "$ROOT" <<'PY'
-import importlib, pathlib, sys
+import importlib, importlib.util, pathlib, sys
 root = pathlib.Path(sys.argv[1]).resolve()
-for name in ("services.flow.cli", "services.flowcloud"):
+modules = ["services.flow.cli"]
+if importlib.util.find_spec("services.flow.server") is not None:
+    modules.append("services.flow.server")
+for name in modules:
     module = importlib.import_module(name)
     location = pathlib.Path(module.__file__).resolve()
     if root in location.parents or "site-packages" not in location.parts:
         raise SystemExit(f"{name} imported from {location}, not the installed wheel")
-print("imports resolve to site-packages")
+    if name == "services.flow.server":
+        ui = location.parent / "ui_dist" / "index.html"
+        print("embedded UI present in installed wheel" if ui.is_file() else "note: installed wheel has no embedded UI")
+print("imports resolve to site-packages: " + ", ".join(modules))
 PY
   echo "verified: flow --help, flow version = $VERSION_OUT"
 fi

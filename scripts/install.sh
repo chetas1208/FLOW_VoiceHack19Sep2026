@@ -7,7 +7,7 @@
 # What it does: detects OS/arch/Python (>= 3.11), downloads latest.json + the wheel + SHA256SUMS, VERIFIES the
 # sha256 (aborts on mismatch, before touching any existing install), then installs with pipx when available or
 # into a private virtualenv (~/.local/share/flow/venv) with a symlink in ~/.local/bin. No sudo, no shell rc edits,
-# safe to re-run (upgrade/reinstall).
+# safe to re-run (upgrade/reinstall). It installs code only: models are never downloaded (see `flow models install`).
 #
 # Environment:
 #   FLOW_RELEASE_URL     release location: https://... (default: GitHub latest release), file:///dir or a directory
@@ -297,8 +297,11 @@ main() {
   esac
   say ""
   say "Next steps:"
-  say "  flow login     sign in and authorize this device"
+  say "  flow setup     guided first-run setup (permissions, optional local models, remote access)"
   say "  flow doctor    check your setup"
+  say ""
+  say "This installed FLOW's code only. No models were downloaded; install them when you want with:"
+  say "  flow models install"
   if [ "$RELEASE_KIND" = http ]; then
     say "Uninstall:  curl -fsSL $RELEASE_SRC/install.sh | sh -s -- --uninstall"
   else

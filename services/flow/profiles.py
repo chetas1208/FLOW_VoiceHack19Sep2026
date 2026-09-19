@@ -1,62 +1,64 @@
-"""Named endpoint profiles. Endpoints are never hard-coded outside this table."""
+"""Deployment settings shared by the daemon and CLI.
+
+FLOW has no hosted backend: the daemon on the user's Mac is the API. All that is configurable is where the
+static web app lives, which port the daemon listens on, and which browser origins may call it.
+"""
 
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
 from urllib.parse import urlparse
 
-
-@dataclass(frozen=True, slots=True)
-class Profile:
-    name: str
-    api_url: str
-    web_url: str
-    auth_mode: str
+DEFAULT_WEB_URL = "https://app.flow.ai"
+DEFAULT_LOCAL_PORT = 8765
+DEFAULT_DEV_ORIGIN = "http://localhost:5173"
 
 
-PROFILES = {
-    "local": Profile("local", "http://127.0.0.1:8080", "http://127.0.0.1:3000", "local"),
-    "development": Profile("development", "http://127.0.0.1:8080", "http://127.0.0.1:3000", "local"),
-    "staging": Profile("staging", "https://api.staging.flow.ai", "https://app.staging.flow.ai", "remote"),
-    "production": Profile("production", "https://api.flow.ai", "https://app.flow.ai", "remote"),
-}
-DEFAULT_PROFILE = "production"
-AUTH_MODES = ("local", "remote")
-_LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+def web_url() -> str:
+    """``FLOW_WEB_URL``: the (static) web app that pairs with the daemon."""
+    return (os.getenv("FLOW_WEB_URL") or DEFAULT_WEB_URL).strip().rstrip("/")
 
 
-def active_profile() -> Profile:
-    name = os.getenv("FLOW_PROFILE", DEFAULT_PROFILE).strip().lower()
-    if name not in PROFILES:
-        raise ValueError(f"unknown FLOW_PROFILE {name!r}; expected one of {', '.join(PROFILES)}")
-    return PROFILES[name]
+def local_port() -> int:
+    """``FLOW_LOCAL_PORT`` (default 8765)."""
+    raw = os.getenv("FLOW_LOCAL_PORT", str(DEFAULT_LOCAL_PORT)).strip()
+    try:
+        port = int(raw)
+    except ValueError as exc:
+        raise ValueError(f"FLOW_LOCAL_PORT must be an integer, got {raw!r}") from exc
+    if not 1 <= port <= 65535:
+        raise ValueError("FLOW_LOCAL_PORT must be between 1 and 65535")
+    return port
 
 
-def resolve_auth_mode(profile: Profile | None = None) -> str:
-    """``FLOW_AUTH_MODE`` (local|remote), defaulting from the profile. Local auth is never allowed in production."""
-    profile = profile or active_profile()
-    mode = os.getenv("FLOW_AUTH_MODE", profile.auth_mode).strip().lower()
-    if mode not in AUTH_MODES:
-        raise ValueError(f"FLOW_AUTH_MODE must be one of {', '.join(AUTH_MODES)}")
-    if mode == "local" and profile.name == "production":
-        raise ValueError("FLOW_AUTH_MODE=local is not permitted with FLOW_PROFILE=production")
-    return mode
+def bind_host() -> str:
+    """The daemon binds loopback unless ``FLOW_BIND_HOST`` explicitly says otherwise."""
+    return (os.getenv("FLOW_BIND_HOST") or "127.0.0.1").strip()
 
 
-def api_url(profile: Profile | None = None) -> str:
-    return (os.getenv("FLOW_API_URL") or (profile or active_profile()).api_url).strip().rstrip("/")
+def local_origin() -> str:
+    return f"http://127.0.0.1:{local_port()}"
 
 
-def web_url(profile: Profile | None = None) -> str:
-    return (os.getenv("FLOW_WEB_URL") or (profile or active_profile()).web_url).strip().rstrip("/")
+def normalize_origin(value: str) -> str | None:
+    """``scheme://host[:port]`` with no path or trailing slash; ``None`` for anything that is not a plain origin."""
+    parsed = urlparse(value.strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.path not in {"", "/"} \
+            or parsed.params or parsed.query or parsed.fragment:
+        return None
+    port = f":{parsed.port}" if parsed.port else ""
+    return f"{parsed.scheme}://{parsed.hostname.lower()}{port}"
 
 
-def require_secure_url(url: str) -> str:
-    """Bearer tokens only travel over TLS, except to a loopback development server."""
-    parsed = urlparse(url)
-    if parsed.scheme == "https" and parsed.hostname:
-        return url
-    if parsed.scheme == "http" and parsed.hostname in _LOOPBACK:
-        return url
-    raise ValueError(f"refusing to use {url!r}: FLOW endpoints must be https:// (http:// only for localhost)")
+def allowed_origins() -> tuple[str, ...]:
+    """Browser origins allowed to call the daemon: ``FLOW_ALLOWED_ORIGINS`` (comma separated; ``*`` is never
+    honoured) or the defaults (web app + Vite dev server), always plus the daemon's own origin for ``/ui``."""
+    configured = os.getenv("FLOW_ALLOWED_ORIGINS")
+    raw = [item for item in (configured or "").split(",") if item.strip()] or [web_url(), DEFAULT_DEV_ORIGIN]
+    port = local_port()
+    origins: list[str] = []
+    for item in [*raw, f"http://127.0.0.1:{port}", f"http://localhost:{port}"]:
+        origin = normalize_origin(item)
+        if origin and origin not in origins:
+            origins.append(origin)
+    return tuple(origins)

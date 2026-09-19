@@ -8,16 +8,12 @@ from . import profiles
 FLOW_VERSION = "0.2.0"
 
 
-def _flag(name: str, default: bool = False) -> bool:
-    return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
-
-
 def data_dir() -> Path:
     return Path(os.getenv("FLOW_DATA_DIR", os.getenv("QA_DATA_DIR", ".local-runs"))).resolve()
 
 
 def store_screenshots() -> bool:
-    return _flag("FLOW_STORE_SCREENSHOTS")
+    return os.getenv("FLOW_STORE_SCREENSHOTS", "false").lower() in {"1", "true", "yes"}
 
 
 def screenshot_retention_seconds() -> int:
@@ -31,35 +27,22 @@ def config_dir() -> Path:
     return Path(os.getenv("FLOW_CONFIG_DIR", str(Path.home() / ".config" / "flow"))).expanduser()
 
 
-def api_endpoint() -> str:
-    """Cloud API base URL: ``FLOW_API_URL`` or the active profile's."""
-    return profiles.api_url()
-
-
-def web_endpoint() -> str:
-    return profiles.web_url()
+def local_port() -> int:
+    return profiles.local_port()
 
 
 def local_api_endpoint() -> str:
-    """The local developer API (``services.platform``), not the FLOW cloud."""
-    return os.getenv("FLOW_LOCAL_API_URL", "http://127.0.0.1:8080").rstrip("/")
+    """Where the daemon serves its API (loopback by default)."""
+    return profiles.local_origin()
 
 
-def auth_mode() -> str:
-    return profiles.resolve_auth_mode()
+def web_endpoint() -> str:
+    """The static web app (``FLOW_WEB_URL``, default https://app.flow.ai)."""
+    return profiles.web_url()
 
 
-def cloud_sync_disabled() -> bool:
-    """Kill switch: ``FLOW_CLOUD_SYNC=off`` keeps FLOW purely local even when signed in."""
-    return os.getenv("FLOW_CLOUD_SYNC", "auto").strip().lower() in {"0", "off", "false", "no"}
-
-
-def sync_window_titles() -> bool:
-    return _flag("FLOW_SYNC_WINDOW_TITLES")
-
-
-def sync_evidence() -> bool:
-    return _flag("FLOW_SYNC_EVIDENCE")
+def allowed_origins() -> tuple[str, ...]:
+    return profiles.allowed_origins()
 
 
 def drift_seconds() -> float:

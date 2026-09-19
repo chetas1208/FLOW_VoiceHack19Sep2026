@@ -32,9 +32,10 @@ def release(tmp_path_factory) -> Path:
         pytest.skip("the `build` package is required to build a release")
     out = tmp_path_factory.mktemp("release")
     env = {**os.environ, "PYTHON": sys.executable}
-    proc = run(["sh", str(BUILD_SH), "--out", str(out), "--no-verify", "--no-isolation"], env=env, cwd=ROOT)
+    flags = ["--no-verify", "--no-frontend"]
+    proc = run(["sh", str(BUILD_SH), "--out", str(out), *flags, "--no-isolation"], env=env, cwd=ROOT)
     if proc.returncode != 0:  # fall back to an isolated build (needs network for setuptools)
-        proc = run(["sh", str(BUILD_SH), "--out", str(out), "--no-verify"], env=env, cwd=ROOT)
+        proc = run(["sh", str(BUILD_SH), "--out", str(out), *flags], env=env, cwd=ROOT)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     return out
 
@@ -111,7 +112,8 @@ def test_install_end_to_end_is_idempotent_and_uninstallable(release, wheelhouse,
     proc = run(["sh", str(INSTALL_SH)], env=env)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "Checksum verified" in proc.stdout
-    assert "flow login" in proc.stdout
+    assert "flow setup" in proc.stdout and "flow models install" in proc.stdout
+    assert "flow login" not in proc.stdout  # no accounts; nothing is downloaded by the installer
     assert "not on your PATH" in proc.stderr  # ~/.local/bin is not on PATH in the test env; rc files untouched
 
     link = flow_bin(home)
