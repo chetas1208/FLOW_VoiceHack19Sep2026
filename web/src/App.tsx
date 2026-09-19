@@ -32,7 +32,6 @@ export function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/auth/callback" element={<OidcCallbackPage />} />
           <Route element={<RequireAuth />}>
-            <Route index element={<Navigate to="/sessions" replace />} />
             <Route path="/sessions" element={<SessionsPage />} />
             <Route path="/sessions/new" element={<StartSessionPage />} />
             <Route path="/devices" element={<DevicesPage />} />
