@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 from ..models import ActivityCategory, Observation
 from ..privacy.policy import PrivacyPolicy
 from ..session_manager import SessionManager, _id
+from ..efficiency import EfficiencyEngine
 from .base import DesktopObserver
 from .frame import CapturedFrame, CaptureReason
 
@@ -31,10 +32,11 @@ class FrameChangeDetector:
 class ObserverPipeline:
     def __init__(self, session_id: str, goal: str, observer: DesktopObserver,
                  analyzer: "ActivityAnalyzer", manager: SessionManager,
-                 privacy: PrivacyPolicy | None = None) -> None:
+                 privacy: PrivacyPolicy | None = None, efficiency: EfficiencyEngine | None = None) -> None:
         self.session_id, self.goal = session_id, goal
         self.observer, self.analyzer, self.manager = observer, analyzer, manager
         self.privacy = privacy or PrivacyPolicy()
+        self.efficiency = efficiency
         self.change_detector = FrameChangeDetector()
 
     async def observe_once(self, reason: CaptureReason = CaptureReason.PERIODIC) -> Observation | None:
@@ -51,6 +53,12 @@ class ObserverPipeline:
                 "application": context.application, "bundle_id": context.bundle_id,
                 "window_title": context.window_title,
             }, history)
+            if self.efficiency is not None:
+                from ..vision.schema import VisionObservation
+                if isinstance(result, VisionObservation):
+                    semantic = self.efficiency.update(result)
+                    semantic.id, semantic.session_id = _id("obs"), self.session_id
+                    return self.manager.add_observation(self.session_id, semantic)
             if not isinstance(result, AnalysisResult):
                 result = validate_analysis(result)
         except (ValueError, RuntimeError):

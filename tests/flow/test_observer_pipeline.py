@@ -10,6 +10,8 @@ from services.flow.privacy import PrivacyPolicy
 from services.flow.session_manager import SessionManager
 from services.flow.store import FlowStore
 from services.flow.voice.policy import InterventionPolicy, InterventionPolicyConfig
+from services.flow.vision.schema import VisionActivityType, VisionObservation
+from services.flow.efficiency import EfficiencyEngine
 
 
 class Analyzer:
@@ -53,3 +55,20 @@ def test_idle_time_is_not_productivity_distraction():
     detector = IdleDetector(idle_after=10, away_after=30)
     assert detector.state(now, now) == IdleState.ACTIVE
     assert detector.state(now, now + timedelta(seconds=15)) == IdleState.IDLE
+
+
+def test_vision_observation_flows_through_efficiency_engine():
+    class VisionAnalyzer:
+        async def analyze(self, goal, frame, context, history):
+            return VisionObservation(frame.timestamp, frame.application, frame.window_title,
+                                     "editing authentication tests", VisionActivityType.DEBUGGING,
+                                     relevance=.9, progress_signal=.7, confidence=.9)
+    async def run():
+        with tempfile.TemporaryDirectory() as path:
+            manager = SessionManager(FlowStore(path)); session = manager.start_session("Fix auth")
+            frame = CapturedFrame(datetime.now(timezone.utc), application="Editor", image_bytes=b"frame")
+            observer = MockDesktopObserver([frame]); await observer.start()
+            item = await ObserverPipeline(session.id, session.goal, observer, VisionAnalyzer(), manager,
+                                          efficiency=EfficiencyEngine(session.goal)).observe_once()
+            assert item.category == ActivityCategory.CORE_TASK
+    asyncio.run(run())

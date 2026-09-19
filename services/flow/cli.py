@@ -9,7 +9,6 @@ import platform
 import subprocess
 import sys
 import webbrowser
-import asyncio
 from datetime import datetime, timedelta, timezone
 
 from .auth import CLIAuthRequest, local_token
@@ -18,12 +17,15 @@ from .credentials import default_credential_store
 from .daemon import pid_path, request
 from .device import metadata
 from .models import SessionStatus
+from .models_registry import MODEL_REGISTRY, ModelManager
+from .efficiency import EfficiencyEngine
 from .activity import AnalysisResult
 from .observer import CapturedFrame, MockDesktopObserver
 from .observer.base import create_observer
 from .observer.frame import CaptureReason
 from .privacy import PrivacyPolicy
 from .runtime import SessionRuntime
+from .vision.schema import VisionActivityType, VisionObservation
 from .session_manager import InvalidTransition, SessionManager, SessionNotFound
 
 VERSION = "0.2.0"
@@ -59,6 +61,9 @@ def _parser() -> argparse.ArgumentParser:
     observer = sub.add_parser("observer"); observer.add_argument("action", choices=["test"])
     analyze = sub.add_parser("analyze"); analyze.add_argument("action", choices=["test"]); analyze.add_argument("--goal", required=True)
     e2e = sub.add_parser("e2e"); e2e.add_argument("--goal", default="Test FLOW authentication intelligence")
+    models = sub.add_parser("models"); models.add_argument("action", choices=["status", "install", "remove"]); models.add_argument("target", nargs="?", choices=["vision", "voice"])
+    vision = sub.add_parser("vision"); vision.add_argument("action", choices=["test"]); vision.add_argument("--goal", required=True)
+    efficiency = sub.add_parser("efficiency"); efficiency.add_argument("action", choices=["test"])
     return parser
 
 
@@ -125,6 +130,25 @@ def main(argv=None) -> int:
         if args.action != "mode": policy.save(config_dir() / "privacy.json")
         print("FLOW configuration updated"); return 0
     if args.command == "daemon": return _daemon_action(args.action)
+    if args.command == "models":
+        manager = ModelManager()
+        try:
+            if args.action == "status":
+                print("FLOW MODELS\n")
+                for item in manager.status(args.target):
+                    print(f"{item['name']}\nStatus        {item['status']}\nPurpose       {item['purpose']}\nPath          {item['path']}\n")
+                hardware = manager.hardware(); print(f"Runtime       {hardware['architecture']} / MLX={'available' if hardware['mlx_available'] else 'unavailable'}")
+            elif args.action == "remove":
+                if not args.target: raise ValueError("models remove requires vision or voice")
+                manager.remove(args.target); print(f"Removed {MODEL_REGISTRY[args.target].name}")
+            else:
+                targets = [args.target] if args.target else list(MODEL_REGISTRY)
+                for target in targets:
+                    print(f"Installing {MODEL_REGISTRY[target].name}...")
+                    item = manager.install(target)[0]; print(f"{item['name']}: {item['status']}")
+        except (RuntimeError, ValueError) as exc:
+            print(f"flow models: {exc}", file=sys.stderr); return 2
+        return 0
     if args.command == "voice":
         try:
             import importlib.util
@@ -150,10 +174,21 @@ def main(argv=None) -> int:
             return 0
         except Exception as exc:
             print(f"FLOW observer test: FAIL ({exc})", file=sys.stderr); return 1
-    if args.command == "analyze":
+    if args.command in {"analyze", "vision"}:
         print("FLOW analyzer test requires a configured multimodal provider and a permitted macOS frame.")
         print(f"Goal              {args.goal}\nResult             NOT_CONFIGURED")
         return 2
+    if args.command == "efficiency":
+        engine = EfficiencyEngine("Fix JWT authentication tests")
+        now = datetime.now(timezone.utc)
+        sequence = [("Implementing JWT middleware", VisionActivityType.IMPLEMENTATION, .92, .8),
+                    ("Reading JWT expiration documentation", VisionActivityType.RESEARCH, .82, .3),
+                    ("Unrelated social feed", VisionActivityType.BROWSING, .05, 0.0)]
+        for index, (activity, kind, relevance, progress) in enumerate(sequence):
+            engine.update(VisionObservation(now + timedelta(minutes=index), "replay", None, activity, kind,
+                                            relevance=relevance, progress_signal=progress, confidence=.9))
+        report = engine.report(); print(f"FLOW EFFICIENCY TEST\n\nSegments          {len(report['segments'])}\nAlignment         {report['alignment']:.0%}\nDrift             {report['drift_state']}\nRecommendation    {report['recommendation']}")
+        return 0
     if args.command == "e2e":
         return _portable_e2e(args.goal)
 

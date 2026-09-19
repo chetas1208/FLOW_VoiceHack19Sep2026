@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .activity import ActivityAnalyzer
+from .efficiency import EfficiencyEngine
 from .models import SessionStatus
 from .observer import AdaptiveSampler, ObserverPipeline, SamplerConfig
 from .session_manager import SessionManager
@@ -25,12 +26,13 @@ class RuntimeState:
 
 class SessionRuntime:
     def __init__(self, manager: SessionManager, session_id: str, observer, analyzer: ActivityAnalyzer,
-                 sampler: AdaptiveSampler | None = None) -> None:
+                 sampler: AdaptiveSampler | None = None, efficiency: EfficiencyEngine | None = None) -> None:
         session = manager.get_session(session_id)
         self.manager, self.session_id, self.goal = manager, session_id, session.goal
         self.observer, self.analyzer = observer, analyzer
         self.sampler = sampler or AdaptiveSampler(SamplerConfig())
-        self.pipeline = ObserverPipeline(session_id, self.goal, observer, analyzer, manager)
+        self.efficiency = efficiency or EfficiencyEngine(self.goal)
+        self.pipeline = ObserverPipeline(session_id, self.goal, observer, analyzer, manager, efficiency=self.efficiency)
         self.context = TemporalContext(self.goal)
         self.state = RuntimeState()
         self._stop = asyncio.Event()
@@ -71,4 +73,5 @@ class SessionRuntime:
         report["runtime"] = {"observer": self.state.observer, "analyzer": self.state.analyzer,
                              "captures": self.state.captures, "analyses": self.state.analyses,
                              "skipped_frames": self.state.skipped_frames, "last_error": self.state.last_error}
+        report["efficiency"] = self.efficiency.report()
         return report
