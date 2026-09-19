@@ -7,7 +7,7 @@ import base64
 import json
 import os
 import time
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 
@@ -29,6 +29,14 @@ def _same_origin(url, origin):
     return (target.scheme, target.hostname, target.port) == (root.scheme, root.hostname, root.port)
 
 
+def _auth_headers(spec):
+    """Return bounded UI auth headers without persisting or logging secret values."""
+    token_var = spec.get('auth_env')
+    if not token_var:
+        return {}
+    return {'Authorization': 'Bearer ' + os.environ[token_var]}
+
+
 class PlaywrightDriver:
     kind = 'web'
     def __init__(self, spec, events):
@@ -43,14 +51,30 @@ class PlaywrightDriver:
         try:
             browser_name = spec.get('browser', 'chromium')
             options = {'headless': True}
+            browser_type = getattr(self._playwright, browser_name)
             if browser_name == 'chromium':
                 custom = os.getenv('QA_CHROMIUM_PATH') or ('/usr/bin/chromium' if os.path.isfile('/usr/bin/chromium') else None)
                 if custom:
+                    if not os.path.isfile(custom):
+                        raise UnsupportedAction('configured Chromium executable is unavailable')
                     options['executable_path'] = custom
-            self.browser = getattr(self._playwright, browser_name).launch(**options)
-            self.context = self.browser.new_context(viewport=spec.get('viewport', {'width': 1280, 'height': 800}),
-                                                    accept_downloads=False, service_workers='block',
-                                                    ignore_https_errors=False)
+            elif not os.path.isfile(browser_type.executable_path):
+                raise UnsupportedAction(
+                    f'Playwright browser engine is not installed: {browser_name}; run python -m playwright install {browser_name}'
+                )
+            try:
+                self.browser = browser_type.launch(**options)
+            except Exception as exc:
+                text = str(exc)
+                if 'Executable doesn' in text or 'playwright install' in text.lower():
+                    raise UnsupportedAction(
+                        f'Playwright browser engine is not installed: {browser_name}; run python -m playwright install {browser_name}'
+                    ) from exc
+                raise
+            context_options = {'viewport': spec.get('viewport', {'width': 1280, 'height': 800}),
+                               'accept_downloads': False, 'service_workers': 'block',
+                               'ignore_https_errors': False}
+            self.context = self.browser.new_context(**context_options)
             self.page = self.context.new_page()
             self.page.set_default_timeout(spec.get('timeout_ms', 5000))
             self.page.on('console', self._console)
@@ -61,10 +85,9 @@ class PlaywrightDriver:
             self.page.on('response', self._response)
             self.page.on('dialog', lambda dialog: dialog.dismiss())
             self.page.on('download', lambda download: download.cancel())
+            self.page.route('**/*', self._guard_route)
             if self.fixture_relay:
                 self._install_fixture_bridge()
-            else:
-                self.page.route('**/*', self._guard_route)
         except BaseException:
             self.close()
             raise
@@ -84,12 +107,35 @@ class PlaywrightDriver:
             self.events.add('network', 'error', 'cross-origin request blocked')
             route.abort('blockedbyclient')
             return
-        if self.spec.get('propagate_trace') and getattr(self, 'traceparent', None):
+        headers = None
+        auth_headers = _auth_headers(self.spec)
+        if auth_headers:
             headers = dict(route.request.headers)
+            headers.update(auth_headers)
+        if self.spec.get('propagate_trace') and getattr(self, 'traceparent', None):
+            headers = dict(route.request.headers) if headers is None else headers
             headers['traceparent'] = self.traceparent
-            route.continue_(headers=headers)
-        else:
-            route.continue_()
+        if not auth_headers:
+            if headers is None:
+                route.continue_()
+            else:
+                route.continue_(headers=headers)
+            return
+        current_url = url
+        for _ in range(6):
+            response = route.fetch(url=current_url, headers=headers, max_redirects=0)
+            location = response.headers.get('location')
+            if response.status < 300 or response.status >= 400 or not location:
+                route.fulfill(response=response)
+                return
+            next_url = urljoin(current_url, location)
+            if not _same_origin(next_url, self.origin):
+                self.events.add('network', 'error', 'cross-origin redirect blocked')
+                route.abort('blockedbyclient')
+                return
+            current_url = next_url
+        self.events.add('network', 'error', 'same-origin redirect limit exceeded')
+        route.abort('blockedbyclient')
 
     def _install_fixture_bridge(self):
         # Fixture-only bypass for environments where Chromium localhost network
@@ -110,6 +156,7 @@ class PlaywrightDriver:
                 raise DriverError('fixture bridge requires mutation approval')
             headers = {k: v for k, v in options.get('headers', {}).items()
                        if k.lower() in ('accept', 'content-type') and isinstance(v, str)}
+            headers.update(_auth_headers(self.spec))
             if self.spec.get('propagate_trace') and getattr(self, 'traceparent', None):
                 headers['traceparent'] = self.traceparent
             try:
@@ -136,7 +183,7 @@ class PlaywrightDriver:
         if not _same_origin(url, self.origin):
             raise DriverError('cross-origin navigation denied')
         with httpx.Client(trust_env=False, follow_redirects=False, timeout=5) as client:
-            response = client.get(url)
+            response = client.get(url, headers=_auth_headers(self.spec))
         if response.is_redirect or len(response.content) > 1_048_576:
             raise DriverError('fixture navigation redirect or oversize response denied')
         self.events.add('network', 'error' if response.status_code >= 400 else 'info',

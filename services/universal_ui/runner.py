@@ -290,6 +290,9 @@ def execute(spec, output='.local-runs', otlp_endpoint=None, *, local_files=False
                 if status == 'FAIL': verdict = 'FAIL'
                 elif status == 'INCONCLUSIVE' and verdict == 'PASS': verdict = 'INCONCLUSIVE'
             span.set_attribute('qa.verdict', verdict)
+    except UnsupportedAction as exc:
+        error = scrub(exc)
+        verdict = 'INCONCLUSIVE'
     except Exception as exc:
         error = 'UI setup failed: ' + type(exc).__name__
         verdict = 'INFRA_ERROR'

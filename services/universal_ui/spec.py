@@ -90,6 +90,8 @@ def validate(spec, *, local_files=False):
         approved_base_url(spec['webdriver_url'])
         if spec.get('fixture_relay'):
             raise ValueError('fixture relay is only for web test fixtures')
+        if spec.get('auth_env'):
+            raise ValueError('auth_env bearer header injection currently supports driver=web')
     elif 'webdriver_url' in spec or 'capabilities' in spec:
         raise ValueError('WebDriver configuration requires driver=webdriver')
     if 'oracle_origin' in spec:

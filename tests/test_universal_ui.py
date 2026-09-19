@@ -13,7 +13,7 @@ from jsonschema import ValidationError
 
 from services.engine.store import Store
 from services.universal_ui.discovery import discover
-from services.universal_ui.drivers import DriverError, UnsupportedAction, WebDriver
+from services.universal_ui.drivers import DriverError, PlaywrightDriver, UnsupportedAction, WebDriver
 from services.universal_ui.evidence import EventStream, scrub
 from services.universal_ui.runner import execute
 from services.universal_ui.spec import validate
@@ -111,6 +111,172 @@ def test_logs_scrub_credential_email_and_query():
     assert scrub('Bearer secret-123 password=pw email=user@example.com http://site/a?key=foo') == (
         'Bearer [REDACTED] password=[REDACTED] email=[EMAIL] http://site/a?[REDACTED]')
 
+
+
+def test_auth_env_bearer_header_allows_authorized_fixture_without_secret_leak():
+    seen = {'authorized': False}
+
+    class AuthenticatedPage(BaseHTTPRequestHandler):
+        def do_GET(self):
+            expected = 'Bearer fixture-token-123'
+            seen['authorized'] = self.headers.get('Authorization') == expected
+            if not seen['authorized']:
+                body = b'<!doctype html><title>Denied</title><h1>Denied</h1>'
+                self.send_response(401)
+            else:
+                body = b'<!doctype html><title>Private fixture</title><h1>Ready</h1>'
+                self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(('127.0.0.1', 0), AuthenticatedPage)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        spec = {'id': 'auth-env-fixture', 'origin': f'http://127.0.0.1:{server.server_port}',
+                'fixture_relay': True, 'auth_env': 'QA_TARGET_TOKEN_AUTH_ENV_FIXTURE',
+                'steps': [{'name': 'open', 'action': 'goto', 'path': '/'},
+                          {'name': 'title', 'action': 'assert_title', 'expected': 'Private fixture'}]}
+        with tempfile.TemporaryDirectory() as temp:
+            with patch.dict(os.environ, {'QA_TARGET_TOKEN_AUTH_ENV_FIXTURE': 'fixture-token-123'}, clear=False):
+                run = execute(spec, temp)
+            assert run['verdict'] == 'PASS', run
+            assert seen['authorized'] is True
+            evidence = Store(temp).evidence_bytes(run['evidence_sha256'])
+            assert b'fixture-token-123' not in evidence
+            assert b'Authorization' not in evidence
+    finally:
+        server.shutdown(); server.server_close(); thread.join(timeout=3)
+
+
+
+def test_token_leak_redirect_keeps_auth_on_same_origin_and_off_third_party():
+    state = {'app_auth': [], 'third_party_auth': []}
+
+    class ThirdParty(BaseHTTPRequestHandler):
+        def do_GET(self):
+            state['third_party_auth'].append(self.headers.get('Authorization'))
+            body = b'leak target'
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    third = ThreadingHTTPServer(('127.0.0.1', 0), ThirdParty)
+    third_thread = threading.Thread(target=third.serve_forever, daemon=True)
+    third_thread.start()
+
+    class RedirectingApp(BaseHTTPRequestHandler):
+        def do_GET(self):
+            state['app_auth'].append(self.headers.get('Authorization'))
+            self.send_response(302)
+            self.send_header('Location', f'http://localhost:{third.server_port}/leak')
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    app = ThreadingHTTPServer(('127.0.0.1', 0), RedirectingApp)
+    app_thread = threading.Thread(target=app.serve_forever, daemon=True)
+    app_thread.start()
+    driver = None
+    try:
+        spec = {'id': 'token-leak-redirect', 'origin': f'http://127.0.0.1:{app.server_port}',
+                'auth_env': 'QA_TARGET_TOKEN_REDIRECT',
+                'steps': [{'name': 'open', 'action': 'goto', 'path': '/redirect'}]}
+        with patch.dict(os.environ, {'QA_TARGET_TOKEN_REDIRECT': 'redirect-secret'}, clear=False):
+            driver = PlaywrightDriver(spec, EventStream())
+            with pytest.raises(Exception):
+                driver.navigate('/redirect')
+        assert state['app_auth'] == ['Bearer redirect-secret']
+        assert all(value is None for value in state['third_party_auth'])
+    finally:
+        if driver:
+            driver.close()
+        app.shutdown(); app.server_close(); app_thread.join(timeout=3)
+        third.shutdown(); third.server_close(); third_thread.join(timeout=3)
+
+
+def test_token_leak_relay_subresource_keeps_auth_on_fixture_and_off_third_party():
+    state = {'app_auth': [], 'third_party_auth': []}
+
+    class ThirdParty(BaseHTTPRequestHandler):
+        def do_GET(self):
+            state['third_party_auth'].append(self.headers.get('Authorization'))
+            body = b'pixel'
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    third = ThreadingHTTPServer(('127.0.0.1', 0), ThirdParty)
+    third_thread = threading.Thread(target=third.serve_forever, daemon=True)
+    third_thread.start()
+
+    class FixturePage(BaseHTTPRequestHandler):
+        def do_GET(self):
+            state['app_auth'].append(self.headers.get('Authorization'))
+            body = (f'<!doctype html><title>Relay private</title>'
+                    f'<h1>Ready</h1><img src="http://localhost:{third.server_port}/pixel" />').encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    app = ThreadingHTTPServer(('127.0.0.1', 0), FixturePage)
+    app_thread = threading.Thread(target=app.serve_forever, daemon=True)
+    app_thread.start()
+    try:
+        spec = {'id': 'token-leak-relay', 'origin': f'http://127.0.0.1:{app.server_port}',
+                'fixture_relay': True, 'auth_env': 'QA_TARGET_TOKEN_RELAY',
+                'steps': [{'name': 'open', 'action': 'goto', 'path': '/'},
+                          {'name': 'title', 'action': 'assert_title', 'expected': 'Relay private'}]}
+        with tempfile.TemporaryDirectory() as temp:
+            with patch.dict(os.environ, {'QA_TARGET_TOKEN_RELAY': 'relay-secret'}, clear=False):
+                run = execute(spec, temp)
+            assert run['verdict'] == 'PASS', run
+        assert state['app_auth'] == ['Bearer relay-secret']
+        assert all(value is None for value in state['third_party_auth'])
+    finally:
+        app.shutdown(); app.server_close(); app_thread.join(timeout=3)
+        third.shutdown(); third.server_close(); third_thread.join(timeout=3)
+
+def test_unsupported_browser_engine_setup_is_inconclusive_not_infra_error():
+    spec = {'id': 'unsupported-engine', 'origin': 'http://127.0.0.1:9',
+            'steps': [{'name': 'open', 'action': 'goto', 'path': '/'}]}
+    with tempfile.TemporaryDirectory() as temp:
+        with patch('services.universal_ui.runner.open_driver', side_effect=UnsupportedAction('browser engine unavailable')):
+            run = execute(spec, temp)
+    assert run['verdict'] == 'INCONCLUSIVE', run
+    assert run['error'] == 'browser engine unavailable'
+    assert run['steps_executed'] == 0
+
+
+def test_auth_env_is_rejected_for_webdriver_until_header_injection_exists():
+    with patch.dict(os.environ, {'QA_TARGET_TOKEN_NATIVE': 'native-token'}, clear=False):
+        with pytest.raises(ValueError, match='auth_env bearer header injection'):
+            validate({'id': 'native-auth', 'driver': 'webdriver',
+                      'webdriver_url': 'http://127.0.0.1:4723',
+                      'auth_env': 'QA_TARGET_TOKEN_NATIVE',
+                      'steps': [{'name': 'ready', 'action': 'assert_title', 'expected': 'Ready'}]})
 
 def test_webdriver_native_missing_origin_is_allowed_but_navigation_not():
     validate({'id': 'native', 'driver': 'webdriver', 'webdriver_url': 'http://127.0.0.1:4723',

@@ -17,7 +17,13 @@ python -m services.universal_ui.cli examples/ui-reference.json --auto-audit --ma
 ```
 
 Use `QA_CHROMIUM_PATH=/usr/bin/chromium` when appropriate. Replace the example
-fixture address with your own app's **authorized, running origin**. An HTTP(S)
+fixture address with your own app's **authorized, running origin**. A scenario
+can set `auth_env` to a `QA_TARGET_TOKEN_*` variable; the Playwright web driver
+sends it as an `Authorization: Bearer ...` header only on guarded same-origin
+application requests and local fixture relays. Cross-origin redirects and
+subresources are blocked before token attachment. The token value is never
+written to evidence or event logs. WebDriver/Appium does not yet support this header-injection mode
+and fails validation rather than silently running unauthenticated. An HTTP(S)
 remote origin must be explicitly listed in `QA_ALLOWED_HTTPS_HOSTS` and must
 pass infrastructure egress policy; the host allowlist alone cannot prevent DNS
 rebinding. Never expose the local API to the public internet.
@@ -36,8 +42,9 @@ rebinding. Never expose the local API to the public internet.
   receiver to actually export telemetry; configuration alone is not delivery.
 - `FAIL` identifies observed violations, `INCONCLUSIVE` denotes unavailable
   evidence or unsupported driver capabilities, and `INFRA_ERROR` denotes an
-  unavailable runtime or external oracle. An action-only run is not proof of
-  correctness; write assertions.
+  unavailable runtime or external oracle. Missing Playwright browser binaries
+  are reported as unsupported capability with remediation text, not as product
+  failures. An action-only run is not proof of correctness; write assertions.
 
 For local file tails, set `QA_LOG_ROOT` to an approved directory and reference
 an existing regular file in `log_file`. The remote API rejects file tails and
@@ -69,8 +76,8 @@ blocked; it executes DOM/JS in Chromium but relays HTTP via Python and must
 
 | Interface | Driver | Verification |
 | --- | --- | --- |
-| Web DOM | Playwright Chromium | Local synthetic E2E browser acceptance |
-| Firefox/WebKit | Playwright | Adapter implemented; binaries not validated |
+| Web DOM | Playwright Chromium | Local synthetic E2E browser acceptance, including `auth_env` bearer header fixture coverage |
+| Firefox/WebKit | Playwright | Adapter implemented; missing binaries return explicit INCONCLUSIVE unsupported capability |
 | Mobile web/native | W3C WebDriver / Appium accessibility ID | Protocol client implemented; device/server unverified |
 | Desktop | W3C-compatible server/bridge | Depends on a real desktop driver; unverified |
 | Games/canvas/custom pixel surfaces | Additional plug-in needed | Not implemented |
