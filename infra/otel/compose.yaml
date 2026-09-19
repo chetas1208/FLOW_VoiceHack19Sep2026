@@ -1,0 +1,25 @@
+# Local development only. Collector receives on host loopback; storage is local SQLite.
+services:
+  receiver:
+    user: "${QA_DOCKER_UID:?Set QA_DOCKER_UID}:${QA_DOCKER_GID:?Set QA_DOCKER_GID}"
+    build:
+      context: ../..
+      dockerfile: infra/otel/receiver.Dockerfile
+    environment:
+      QA_DATA_DIR: /app/data
+      QA_ALLOW_PUBLIC_OTLP: '1'
+    volumes:
+      - ../../.local-runs:/app/data
+    # No host port: only the Collector should reach this development receiver.
+    restart: unless-stopped
+  collector:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "127.0.0.1:4318:4318"
+      - "127.0.0.1:4317:4317"
+    depends_on:
+      - receiver
+    restart: unless-stopped

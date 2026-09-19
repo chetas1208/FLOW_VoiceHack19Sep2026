@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flow-agent"
+version = "0.2.0"
+description = "FLOW local work-session observer and coach"
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.115,<1", "httpx>=0.27,<1", "pydantic>=2,<3"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "uvicorn>=0.30,<1"]
+vision = ["huggingface_hub>=0.24,<1", "transformers>=4.45,<5", "Pillow>=10,<13"]
+voice = ["kokoro>=0.9", "sounddevice>=0.5,<1"]
+
+[project.scripts]
+flow = "services.flow.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["services*", "benchmarks*", "contracts*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

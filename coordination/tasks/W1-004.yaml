@@ -1,0 +1,13 @@
+# Planning manifest only: translate to actual HACP contract schema after inspecting implementation.
+task_id: W1-004
+owner: A3
+counterparty: A0
+status: proposed
+title: Agentic fixture
+depends_on: [W1-001]
+deliverable: Tool-agent fixture and oracle
+acceptance:
+  - Artifact has reproducible validation instructions
+  - Evidence and commit SHA supplied by owner
+  - Counterparty verifies independently
+  - CI gate passes before merge

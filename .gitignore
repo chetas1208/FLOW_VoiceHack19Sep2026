@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+.env
+.pytest_cache/
+.local-runs/
+.hacp/
+*.sqlite3
+target/
+build/
+dist/
+*.egg-info/
