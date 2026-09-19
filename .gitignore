@@ -11,6 +11,3 @@ target/
 build/
 dist/
 *.egg-info/
-node_modules/
-native/bin/
-data/
