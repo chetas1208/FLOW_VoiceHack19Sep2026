@@ -79,7 +79,7 @@ class ModelManager:
                     from huggingface_hub import snapshot_download
                 except ImportError as exc:
                     raise RuntimeError("install model downloads with: pip install huggingface_hub") from exc
-                snapshot_download(repo_id=spec.source, local_dir=str(staging), local_dir_use_symlinks=False)
+                snapshot_download(repo_id=spec.source, local_dir=str(staging))
                 files = [path for path in staging.rglob("*") if path.is_file()]
                 if not files:
                     raise RuntimeError(f"model download produced no files: {spec.name}")
