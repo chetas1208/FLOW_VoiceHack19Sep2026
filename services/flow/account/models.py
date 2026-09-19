@@ -55,6 +55,7 @@ class CLIAuthRequest:
     status: str = "pending"
     used_at: datetime | None = None
     code: str | None = None
+    user_code: str | None = None
 
 
 @dataclass(slots=True)

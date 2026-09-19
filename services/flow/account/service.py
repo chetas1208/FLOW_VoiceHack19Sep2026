@@ -62,7 +62,10 @@ class AccountService:
         if not challenge or not state or not device.get("id"):
             raise ValueError("challenge, state, and device id are required")
         now = _now()
-        request = CLIAuthRequest("car_" + uuid4().hex, state, challenge, device, scopes, now + ttl, now)
+        user_code = "-".join("".join(secrets.choice("ABCDEFGHJKMNPQRSTUVWXYZ23456789") for _ in range(size))
+                              for size in (4, 4))
+        request = CLIAuthRequest("car_" + uuid4().hex, state, challenge, device, scopes, now + ttl, now,
+                                user_code=user_code)
         with self.store.lock:
             self.store.requests[request.id] = request
         return request

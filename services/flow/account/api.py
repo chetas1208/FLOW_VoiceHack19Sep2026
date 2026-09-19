@@ -46,7 +46,10 @@ def router_for(service: AccountService) -> APIRouter:
     @router.post("/v1/cli/auth/requests", status_code=201)
     def start(payload: CLIRequestIn):
         item = service.start_cli_request(challenge=payload.code_challenge, state=payload.state, device=payload.device)
-        return {"request_id": item.id, "state": item.state, "expires_at": item.expires_at}
+        return {"request_id": item.id, "user_code": item.user_code, "state": item.state,
+                "verification_uri": "/cli/authorize", "verification_uri_complete": f"/cli/authorize?request={item.id}",
+                "expires_in": int((item.expires_at - item.created_at).total_seconds()), "poll_interval": 3,
+                "expires_at": item.expires_at}
 
     @router.get("/v1/cli/auth/requests/{request_id}")
     def request_status(request_id: str):
@@ -55,7 +58,7 @@ def router_for(service: AccountService) -> APIRouter:
             raise HTTPException(404, "authorization request not found")
         if item.status == "pending" and item.expires_at <= datetime.now(timezone.utc):
             item.status = "expired"
-        return {"request_id": item.id, "status": item.status, "device": item.device,
+        return {"request_id": item.id, "status": item.status, "user_code": item.user_code, "device": item.device,
                 "code": item.code if item.status == "approved" else None, "expires_at": item.expires_at}
 
     @router.post("/v1/cli/auth/requests/{request_id}/approve")
@@ -72,6 +75,9 @@ def router_for(service: AccountService) -> APIRouter:
             return service.exchange_code(request_id=payload.request_id, code=payload.code, verifier=payload.code_verifier)
         except AccountError as exc:
             raise handle(exc) from exc
+
+    router.add_api_route("/api/cli/auth/start", start, methods=["POST"], status_code=201)
+    router.add_api_route("/api/cli/auth/token", token, methods=["POST"])
 
     @router.post("/v1/auth/refresh")
     def refresh(payload: RefreshIn):

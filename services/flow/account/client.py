@@ -23,6 +23,7 @@ class AccountClient:
         self.base_url = (base_url or web_endpoint()).rstrip("/")
         self.secrets = secrets
         self.http = client or httpx.Client(timeout=20, follow_redirects=False)
+        self.user_code: str | None = None
 
     def start_login(self) -> tuple[CLIAuthRequest, str, str]:
         request = CLIAuthRequest.create()
@@ -30,6 +31,7 @@ class AccountClient:
             "state": request.state, "code_challenge": request.challenge, "device": metadata(config_dir()),
         }, auth=False)
         request_id = self._text(response, "request_id")
+        self.user_code = response.get("user_code") if isinstance(response.get("user_code"), str) else None
         return request, request_id, authorization_url(self.base_url, request_id, request.state)
 
     def exchange(self, request_id: str, code: str, request: CLIAuthRequest) -> dict[str, Any]:

@@ -28,7 +28,8 @@ def run(args) -> int:
             request, request_id, url = client.start_login()
             if not args.no_browser:
                 webbrowser.open(url)
-            print(f"Open this URL to authorize FLOW:\n{url}\nRequest state: {request.state}")
+            code = f"\nVerification code: {client.user_code}" if client.user_code else ""
+            print(f"Open this URL to authorize FLOW:\n{url}{code}\nRequest state: {request.state}")
             client.wait_for_approval(request_id, request, timeout=args.timeout)
             print("FLOW device authorized")
             return 0
