@@ -5,6 +5,7 @@ __pycache__/
 .env
 .env.local
 .env.*.local
+.vercel/
 .pytest_cache/
 .local-runs/
 .hacp/
