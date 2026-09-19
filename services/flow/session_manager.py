@@ -13,6 +13,7 @@ from .models import (ActivityCategory, DriftState, Intervention, InterventionCha
                      Observation, SessionStatus, WorkSession, ensure_utc, utc_now)
 from .scoring import ScoringEngine
 from .store import FlowStore
+from .temporal import TaskSegmenter
 
 
 class SessionError(Exception):
@@ -159,6 +160,8 @@ class SessionManager:
 
     def report(self, session_id: str) -> dict[str, Any]:
         session = self._session(session_id)
+        observations = self.observations(session_id)
         return {**session.to_dict(), "metrics": self.metrics(session_id).to_dict(),
-                "observation_count": len(self.observations(session_id)),
-                "intervention_count": len(self.interventions(session_id))}
+                "observation_count": len(observations),
+                "intervention_count": len(self.interventions(session_id)),
+                "task_segments": [segment.to_dict() for segment in TaskSegmenter().segment(observations)]}
