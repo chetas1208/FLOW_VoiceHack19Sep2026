@@ -1,0 +1,34 @@
+.shell { min-height: 100dvh; }
+.topbar { width: min(1440px, calc(100% - 40px)); margin: 0 auto; min-height: 72px; display: flex; align-items: center; gap: 30px; border-bottom: 1px solid var(--line-soft); }
+.brand { color: var(--text); text-decoration: none; }
+.wordmark { display: inline-flex; align-items: center; gap: 8px; font-size: 19px; font-weight: 750; letter-spacing: -.04em; }
+.wordmark-text { color: var(--text); }
+.nav { display: flex; align-items: center; gap: 6px; flex: 1; }
+.nav a { color: var(--text-2); text-decoration: none; padding: 9px 12px; border-radius: 8px; font-size: 14px; }
+.nav a:hover, .nav a.active { color: var(--text); background: var(--ink-2); }
+.topbar-right, .me { display: flex; align-items: center; gap: 10px; }
+.me-email { max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-size: 13px; }
+.inbox-btn { display: inline-flex; align-items: center; gap: 7px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--text-2); padding: 7px 9px; cursor: pointer; }
+.inbox-btn:hover, .inbox-btn.has-items { color: var(--text); background: var(--ink-2); border-color: var(--line); }
+.inbox-flag { color: var(--warn); font: 10px var(--mono); letter-spacing: .05em; }
+.inbox-count { min-width: 19px; height: 19px; display: grid; place-items: center; border-radius: 50%; background: var(--warn); color: #1c1207; font-size: 11px; font-weight: 700; }
+.inbox-quiet, .conn-note { font-size: 12px; }
+.devbar { padding: 5px 16px; color: var(--warn); background: rgba(255, 182, 72, .06); border-bottom: 1px solid rgba(255, 182, 72, .18); text-align: center; font-size: 12px; }
+.main { width: min(1440px, calc(100% - 40px)); margin: 0 auto; padding: 34px 0 120px; }
+.page, .report, .narrow-page { width: 100%; max-width: 1160px; margin: 0 auto; }
+.narrow-page { max-width: 680px; }
+.page-head, .rep-hero { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 26px; }
+.page-head > div { display: grid; gap: 7px; }
+.page-head h1 { margin: 0; }
+.page-head p { max-width: 620px; }
+.icon-btn { flex: none; }
+@media (max-width: 720px) {
+  .topbar, .main { width: min(100% - 24px, 1440px); }
+  .topbar { min-height: 62px; gap: 10px; }
+  .nav { order: 3; width: 100%; flex-basis: 100%; overflow-x: auto; }
+  .topbar { flex-wrap: wrap; padding: 10px 0; }
+  .topbar-right { margin-left: auto; }
+  .me-email, .inbox-quiet, .inbox-flag { display: none; }
+  .main { padding-top: 24px; }
+  .page-head, .rep-hero { align-items: flex-start; flex-direction: column; }
+}

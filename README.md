@@ -14,6 +14,21 @@ cloud client boundary, and Kubernetes design artifacts. See
 macOS and production-cloud work. ProofHound remains available as the underlying
 QA platform and compatibility suite.
 
+## FLOW web recreation
+
+The Vite app opens at `/` with the deterministic cinematic FLOW workspace from
+the UI reference. `FlowDemoPage` owns the local clock and tab state, the
+stage-aware workstation is rendered by `Diorama`, and theme tokens are in
+`web/src/styles/tokens.css`; reference-specific layout is in
+`web/src/styles/demo.css`.
+
+```bash
+npm --prefix web install
+npm --prefix web run dev
+npm --prefix web test -- --run
+npm --prefix web run build
+```
+
 # ProofHound
 
 Autonomous QA foundation for web UIs, full-stack, tool-using agentic, and hybrid applications.

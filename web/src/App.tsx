@@ -10,6 +10,7 @@ import { SessionsPage } from './pages/SessionsPage';
 import { StartSessionPage } from './pages/StartSessionPage';
 import { CliAuthPage } from './pages/CliAuthPage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import FlowDemoPage from './pages/FlowDemoPage';
 
 const CockpitPage = lazy(() => import('./pages/CockpitPage'));
 const ReportPage = lazy(() => import('./pages/ReportPage'));
@@ -27,6 +28,7 @@ export function App() {
       <div className="floor" aria-hidden="true" />
       <Suspense fallback={<div className="page-loading"><Spinner /></div>}>
         <Routes>
+          <Route path="/" element={<FlowDemoPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/auth/callback" element={<OidcCallbackPage />} />
           <Route element={<RequireAuth />}>
