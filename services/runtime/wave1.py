@@ -33,13 +33,13 @@ def configure_telemetry(endpoint=None):
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import BatchSpanProcessor
     from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-    provider = TracerProvider(resource=Resource.create({"service.name": "agentgraph-reference-runner"}))
+    provider = TracerProvider(resource=Resource.create({"service.name": "proofhound-reference-runner"}))
     if endpoint:
         provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
             endpoint=endpoint, headers={'x-qa-otlp-token': os.environ['QA_OTLP_INGEST_TOKEN']}
             if os.getenv('QA_OTLP_INGEST_TOKEN') else None)))
     trace.set_tracer_provider(provider)
-    _TELEMETRY = (provider, trace.get_tracer("agentgraph.wave1"), endpoint)
+    _TELEMETRY = (provider, trace.get_tracer("proofhound.wave1"), endpoint)
     return _TELEMETRY[:2]
 
 
@@ -80,7 +80,7 @@ def execute(kind, output, endpoint=None):
         evidence = {"schema_version":"1.0","evidence_id":evidence_id,"run_id":run_id,"kind":"state_snapshot","uri":f"sha256:{digest}","sha256":digest,"collected_at":now(),"redacted":True}
         run.update(status="completed",finished_at=now(),evidence_ids=[evidence_id])
         verdict = {"schema_version":"1.0","verdict_id":str(uuid4()),"run_id":run_id,"status":"PASS" if passed else "FAIL","assertion_results":[{"assertion_id":assertion,"status":"PASS" if passed else "FAIL","evidence_ids":[evidence_id]}],"evidence_ids":[evidence_id],"reason":"Independent fixture state assertion","evaluator_version":"wave1-v1"}
-        trace_ref = {"schema_version":"1.0","run_id":run_id,"trace_id":trace_id,"service_name":"agentgraph-reference-runner"}
+        trace_ref = {"schema_version":"1.0","run_id":run_id,"trace_id":trace_id,"service_name":"proofhound-reference-runner"}
         with sqlite3.connect(output/"runs.sqlite3") as db:
             db.execute("CREATE TABLE IF NOT EXISTS runs (run_id TEXT PRIMARY KEY, kind TEXT NOT NULL, status TEXT NOT NULL, verdict TEXT NOT NULL, trace_id TEXT NOT NULL, evidence_sha256 TEXT NOT NULL, created_at TEXT NOT NULL)")
             db.execute("INSERT INTO runs VALUES (?,?,?,?,?,?,?)",(run_id,kind,run["status"],verdict["status"],trace_id,digest,now()))

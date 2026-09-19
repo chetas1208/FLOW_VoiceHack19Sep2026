@@ -16,7 +16,7 @@ from pathlib import Path
 from uuid import uuid4
 
 ALLOWED = {'python', 'python3', 'pytest', 'node', 'npm'}
-LABEL = 'agentgraph.sandbox=1'
+LABEL = 'proofhound.sandbox=1'
 DOCKER_ERROR = 125  # `docker run` itself failed (daemon, image, option), not the workload
 
 
@@ -56,7 +56,7 @@ def run_isolated(repo, command, *, image='python:3.12-slim', timeout=120, extra_
     if probe is None or probe.returncode != 0:
         return {'status': 'UNAVAILABLE', 'returncode': None, 'stdout': '',
                 'stderr': 'Docker daemon unreachable: no workload was run'}
-    name = 'agentgraph-sb-' + uuid4().hex[:16]
+    name = 'proofhound-sb-' + uuid4().hex[:16]
     args = ['run', '--rm', '--name', name, '--label', LABEL, '--pull=never', '--network=none',
             '--read-only', '--cap-drop=ALL', '--security-opt=no-new-privileges',
             '--pids-limit=64', '--memory=512m', '--cpus=1',

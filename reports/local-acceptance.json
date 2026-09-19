@@ -56,7 +56,7 @@
         "        \"state_mismatch\",",
         "        \"concurrent_runtime_error\"",
         "      ],",
-        "      \"report\": \"/mnt/data/agentgraph-qa/.local-runs/ui-demo/defective.html\"",
+        "      \"report\": \"/mnt/data/proofhound/.local-runs/ui-demo/defective.html\"",
         "    }",
         "  ],",
         "  \"expected_verdicts_matched\": true,",

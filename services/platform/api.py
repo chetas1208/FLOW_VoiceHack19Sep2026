@@ -28,7 +28,7 @@ DATA.mkdir(parents=True, exist_ok=True)
 QUEUE = Queue(DATA / 'jobs.sqlite3')
 STORE = Store(DATA)
 GRAPH = Graph(DATA / 'graph.sqlite3')
-app = FastAPI(title='AgentGraph QA local development API', version='0.5.0')
+app = FastAPI(title='ProofHound local development API', version='0.5.0')
 KINDS = {'agentic', 'fullstack', 'fault-injection'}
 
 
@@ -49,7 +49,7 @@ async def development_auth(request: Request, call_next):
                 pass
         if not hmac.compare_digest(supplied.encode(), token.encode()):
             return Response(status_code=401, content='Authentication required',
-                            headers={'WWW-Authenticate': 'Basic realm=AgentGraph-QA'})
+                            headers={'WWW-Authenticate': 'Basic realm=ProofHound'})
     if request.headers.get('content-length'):
         try:
             if int(request.headers['content-length']) > 131072:
@@ -219,12 +219,12 @@ def dashboard():
                    colors.get(r['verdict'], '#111')+';font-weight:700">'+html.escape(r['verdict'])+
                    '</td><td><code>'+html.escape(r['trace_id'])+'</code></td><td><code>'+
                    html.escape(r['run_id'])+'</code></td></tr>' for r in rows)
-    return '''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>AgentGraph QA · Runs</title><style>
+    return '''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ProofHound · Runs</title><style>
     body{font-family:system-ui,sans-serif;max-width:1200px;margin:3rem auto;padding:0 1rem;color:#1b2533}
     header{display:flex;align-items:baseline;justify-content:space-between}h1{font-size:2rem}p{color:#586879}
     table{width:100%;border-collapse:collapse;overflow:auto;display:block}th,td{padding:.8rem;border-bottom:1px solid #dde3ea;text-align:left;white-space:nowrap}
     th{background:#edf2f7}code{font-size:.75rem}a{color:#235eaa}</style></head><body>
-    <header><h1>AgentGraph QA</h1><span>Local development dashboard</span></header>
+    <header><h1>ProofHound</h1><span>Local development dashboard</span></header>
     <p>Evidence-backed QA run history. API: <a href="/docs">OpenAPI documentation</a></p>
     <table><thead><tr><th>Time (UTC)</th><th>Project</th><th>Scenario</th><th>Verdict</th><th>Trace ID</th><th>Run ID</th></tr></thead>
     <tbody>''' + body + '''</tbody></table></body></html>'''

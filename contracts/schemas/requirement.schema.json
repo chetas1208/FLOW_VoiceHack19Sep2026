@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agentgraph.example/schemas/requirement.schema.json",
+  "$id": "https://proofhound.example/schemas/requirement.schema.json",
   "title": "requirement",
   "type": "object",
   "additionalProperties": false,

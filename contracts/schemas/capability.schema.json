@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agentgraph.example/schemas/capability.schema.json",
+  "$id": "https://proofhound.example/schemas/capability.schema.json",
   "title": "capability",
   "type": "object",
   "additionalProperties": false,

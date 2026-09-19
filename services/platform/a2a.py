@@ -32,7 +32,7 @@ def make_error(id, code, message):
 def card():
     base = os.getenv('QA_PUBLIC_URL', 'http://127.0.0.1:8080').rstrip('/')
     return {
-        'protocolVersion': '0.3.0', 'name': 'AgentGraph QA Benchmark',
+        'protocolVersion': '0.3.0', 'name': 'ProofHound Benchmark',
         'description': 'Limited read-only A2A adapter for running the local reference benchmark.',
         'url': base+'/a2a', 'preferredTransport': 'JSONRPC',
         'version': '0.5.0', 'capabilities': {'streaming': False, 'pushNotifications': False},

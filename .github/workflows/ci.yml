@@ -1,4 +1,4 @@
-name: agentgraph-qa-checks
+name: proofhound-checks
 on: [push, pull_request]
 permissions:
   contents: read

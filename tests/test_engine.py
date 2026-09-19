@@ -178,7 +178,7 @@ class EngineTests(unittest.TestCase):
                 evidence = client.get('/engine/evidence/'+run['evidence_sha256'], headers=auth)
                 self.assertEqual(evidence.status_code, 200)
                 self.assertEqual(client.get('/graph/summary', headers=auth).status_code, 200)
-                self.assertIn('AgentGraph QA', client.get('/dashboard', headers=auth).text)
+                self.assertIn('ProofHound', client.get('/dashboard', headers=auth).text)
             finally:
                 if original[0] is None: os.environ.pop('QA_DATA_DIR', None)
                 else: os.environ['QA_DATA_DIR'] = original[0]

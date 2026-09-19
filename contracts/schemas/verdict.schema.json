@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agentgraph.example/schemas/verdict.schema.json",
+  "$id": "https://proofhound.example/schemas/verdict.schema.json",
   "title": "verdict",
   "type": "object",
   "additionalProperties": false,

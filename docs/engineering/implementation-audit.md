@@ -1,8 +1,8 @@
-# AgentGraph QA Implementation audit
+# ProofHound Implementation audit
 
 Author: peer a. Counterparty: peer b. Date: 2026-09-19.
 
-This audit records the executable baseline for the extracted AgentGraph QA project. It distinguishes what was verified locally from product goals, partially implemented areas, and infrastructure that still needs a real environment. The baseline source commit is `1d94814 chore: establish imported baseline`.
+This audit records the executable baseline for the extracted ProofHound project. It distinguishes what was verified locally from product goals, partially implemented areas, and infrastructure that still needs a real environment. The baseline source commit is `1d94814 chore: establish imported baseline`.
 
 Peer b joined the HACP session after the initial baseline run. A-001 was proposed by peer a and accepted by peer b before this file was edited. B-001 was proposed by peer b and accepted by peer a for HACP evidence export and bridge documentation.
 

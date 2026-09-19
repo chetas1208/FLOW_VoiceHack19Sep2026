@@ -71,13 +71,13 @@ def test_live_timeout_removes_the_container():
 
 def test_live_missing_image_is_infra_error_not_test_failure():
     with _workspace() as temp:
-        result = run_isolated(temp, ['python', '-V'], image='agentgraph-missing-image:never', timeout=60)
+        result = run_isolated(temp, ['python', '-V'], image='proofhound-missing-image:never', timeout=60)
         assert result['status'] == 'INFRA_ERROR' and result['returncode'] == 125
         assert _ours() == []
 
 
 def test_unreachable_daemon_is_unavailable_not_failed():
     with _workspace() as temp:
-        with patch.dict(os.environ, {'DOCKER_HOST': 'unix:///nonexistent/agentgraph.sock'}):
+        with patch.dict(os.environ, {'DOCKER_HOST': 'unix:///nonexistent/proofhound.sock'}):
             result = run_isolated(temp, ['python', '-V'], timeout=30)
         assert result['status'] == 'UNAVAILABLE' and result['returncode'] is None

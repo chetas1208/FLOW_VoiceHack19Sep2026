@@ -16,7 +16,7 @@ from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
     ExportTraceServiceRequest, ExportTraceServiceResponse)
 from google.protobuf.message import DecodeError
 
-app=FastAPI(title='AgentGraph OTLP development receiver')
+app=FastAPI(title='ProofHound OTLP development receiver')
 DB=Path(os.getenv('QA_DATA_DIR','.local-runs')).resolve()/'telemetry.sqlite3'
 SAFE_ATTRIBUTES={
     'service.name','qa.run.id','qa.project.id','qa.scenario.id','qa.kind',

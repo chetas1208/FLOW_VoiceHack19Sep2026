@@ -41,9 +41,9 @@ appear in `.local-runs/telemetry.sqlite3`):
 
 ```bash
 export QA_DOCKER_UID="$(id -u)" QA_DOCKER_GID="$(id -g)"
-docker-compose -p agentgraph-otel -f infra/otel/compose.yaml up -d --build
+docker-compose -p proofhound-otel -f infra/otel/compose.yaml up -d --build
 QA_OTEL_COMPOSE_LIVE=1 python -m pytest -q tests/test_otel_compose_live.py
-docker-compose -p agentgraph-otel -f infra/otel/compose.yaml down
+docker-compose -p proofhound-otel -f infra/otel/compose.yaml down
 ```
 
 Still not verified: production trace storage and retention, a hosted pipeline, mTLS, and

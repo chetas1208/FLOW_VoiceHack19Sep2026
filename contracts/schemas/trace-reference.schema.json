@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agentgraph.example/schemas/trace-reference.schema.json",
+  "$id": "https://proofhound.example/schemas/trace-reference.schema.json",
   "title": "trace-reference",
   "type": "object",
   "additionalProperties": false,

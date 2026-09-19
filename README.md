@@ -1,4 +1,4 @@
-# AgentGraph QA
+# ProofHound
 
 Autonomous QA foundation for web UIs, full-stack, tool-using agentic, and hybrid applications.
 **Current release: executable local universal-UI developer engine; NOT universal coverage or production-ready hosted SaaS.**

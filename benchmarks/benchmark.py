@@ -8,7 +8,7 @@ from services.engine.runner import execute
 
 def benchmark(output=None):
     if output is None:
-        output = tempfile.mkdtemp(prefix='agentgraph-benchmark-')
+        output = tempfile.mkdtemp(prefix='proofhound-benchmark-')
     cases = []
     for kind, fixture in [('fullstack', fullstack_fixture), ('agentic', agentic_fixture)]:
         for fixed in (False, True):

@@ -11,7 +11,7 @@ processors:
     limit_mib: 128
   batch: {}
 exporters:
-  otlphttp/agentgraph:
+  otlphttp/proofhound:
     endpoint: http://receiver:4319
   debug:
     verbosity: basic
@@ -20,4 +20,4 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [otlphttp/agentgraph, debug]
+      exporters: [otlphttp/proofhound, debug]

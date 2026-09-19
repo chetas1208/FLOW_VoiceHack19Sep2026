@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agentgraph.example/schemas/scenario.schema.json",
+  "$id": "https://proofhound.example/schemas/scenario.schema.json",
   "title": "scenario",
   "type": "object",
   "additionalProperties": false,
