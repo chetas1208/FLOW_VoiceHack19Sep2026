@@ -5,6 +5,7 @@ import './styles/shell.css';
 import './styles/cockpit.css';
 import './styles/pages.css';
 import './styles/demo.css';
+import './styles/account.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
