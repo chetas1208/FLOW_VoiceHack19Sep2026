@@ -13,7 +13,9 @@ body:has(.flow-workspace)::before { display: none; }
   inset: 0;
   z-index: 2;
   min-height: 100dvh;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-behavior: smooth;
   color: var(--ink);
   background: #050709;
   font-family: var(--font, Inter, ui-sans-serif, system-ui, sans-serif);
@@ -27,12 +29,14 @@ body:has(.flow-workspace)::before { display: none; }
 .flow-atmosphere::before { z-index: -1; opacity: .28; background: linear-gradient(90deg, rgba(255,255,255,.024) 1px, transparent 1px); background-size: 118px 100%; }
 .flow-atmosphere::after { background: radial-gradient(ellipse at 50% 48%, transparent 31%, rgba(0, 0, 0, .72) 100%); }
 .flow-shell { width: min(100%, 1548px); margin: 0 auto; padding: clamp(10px, 1.2vw, 20px) clamp(12px, 2vw, 28px) clamp(8px, 1vw, 14px); }
-.app-shell { height: 100dvh; max-height: 100dvh; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; box-sizing: border-box; }
-.flow-main { min-height: 0; overflow: hidden; display: flex; flex-direction: column; flex: 1; position: relative; }
-.flow-main > section { flex: 1; min-height: 0; overflow: hidden; width: 100%; }
+.app-shell { min-height: 100dvh; display: flex; flex-direction: column; overflow: visible; box-sizing: border-box; }
+.flow-main { flex: 1 1 auto; overflow: visible; display: flex; flex-direction: column; position: relative; padding-bottom: 8px; }
+.flow-main > section { flex: none; width: 100%; overflow: visible; }
+.flow-header { position: sticky; top: 0; z-index: 12; }
+.flow-footer, .flow-footer-compact { position: sticky; bottom: 0; z-index: 12; margin-top: auto; }
 
 .flow-workspace.is-immersive { background: transparent; }
-.is-immersive-shell { position: relative; overflow: hidden; isolation: isolate; width: 100%; max-width: none; }
+.is-immersive-shell { position: relative; overflow: visible; isolation: isolate; width: 100%; max-width: none; }
 .cockpit-backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
 .cockpit-backdrop > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
 .cockpit-backdrop.is-session > img { object-position: 49% 52%; }
@@ -381,5 +385,45 @@ body:has(.flow-workspace)::before { display: none; }
 
 .is-immersive-shell .flow-header time { display: none; }
 .is-docs-view .flow-shell { width: 100%; max-width: none; }
+
+/* Scroll-friendly workspaces + UX polish */
+.session-workspace-v2 { height: auto; min-height: min(75vh, 680px); padding-bottom: 4px; }
+.agent-workspace-v2 { height: auto; min-height: min(72vh, 640px); padding-bottom: 8px; }
+.session-stage-spine { min-height: clamp(300px, 42vh, 480px); }
+.agent-core-spine { min-height: clamp(280px, 38vh, 440px); }
+.flow-workspace.is-immersive .glass-panel { transition: border-color .2s ease, box-shadow .2s ease; }
+.flow-workspace.is-immersive .glass-panel:hover { border-color: rgba(255, 242, 220, .26); }
+.setup-strip { display: grid; grid-template-columns: 1fr minmax(240px, 360px); gap: 16px; padding: 14px 18px; align-items: start; }
+.setup-strip-copy strong { display: block; font-size: 15px; margin-bottom: 6px; }
+.setup-strip-copy p { margin: 0; font-size: 13px; color: #c5beb6; line-height: 1.45; }
+.setup-strip-actions { display: grid; gap: 8px; }
+.setup-strip .copy-command { margin: 0; }
+.insight-panel header b { padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 500; background: rgba(23,173,107,.25); color: #8af6bf; }
+.agent-composer-bar { grid-template-columns: 1fr auto; grid-template-rows: auto auto; gap: 8px 10px; }
+.agent-composer-bar input { grid-column: 1; grid-row: 1; }
+.agent-composer-bar > button[type="submit"] { grid-column: 2; grid-row: 1; }
+.composer-chips { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.composer-chips button { padding: 6px 11px; border: 1px solid rgba(255,255,255,.12); border-radius: 999px; background: rgba(8,10,12,.2); color: #ddd6cf; font: inherit; font-size: 11px; cursor: pointer; }
+.composer-chips button:hover { border-color: rgba(242,205,145,.35); color: #fff2db; }
+.next-action-title { font-size: 16px; font-weight: 500; margin: 12px 0 8px; line-height: 1.35; }
+.compact-evidence { margin: 8px 0 0; }
+.showcase-root { height: auto; overflow: visible; padding-bottom: 12px; }
+.showcase-body { overflow: visible; flex: none; }
+.showcase-activity-inline { margin-top: 10px; padding: 12px 16px; }
+.showcase-activity-inline header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.showcase-activity-inline header button { border: 0; background: transparent; color: #d3c7b5; font: inherit; cursor: pointer; }
+.showcase-sample-note { margin: 8px 0 0; text-align: center; font-size: 11px; color: #a8a29b; }
+.approval-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.task-queue-panel .task-card { margin-top: 6px; }
+.timeline-compact { max-height: none; min-height: 88px; padding: 12px 16px; }
+@media (max-width: 980px) {
+  .session-main-grid, .agent-main-grid { grid-template-columns: 1fr; }
+  .session-stage-spine, .agent-core-spine { min-height: 260px; order: -1; }
+  .setup-strip { grid-template-columns: 1fr; }
+  .flow-workspace { overflow-y: auto; }
+}
+@media (max-width: 680px) {
+  .session-workspace-v2, .agent-workspace-v2 { min-height: 0; }
+}
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

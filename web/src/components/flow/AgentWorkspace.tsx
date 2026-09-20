@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import type { FlowDevice } from '../../lib/account';
 import { pairingState, presenceLabel, type PresenceState } from '../../lib/flowDeviceModel';
 import { FlowIcon } from './FlowIcon';
@@ -49,7 +49,11 @@ export function AgentWorkspace({
   const unpaired = pairing === 'unpaired' || pairing === 'revoked';
   const online = pairing === 'paired' && presence === 'online';
   const [prompt, setPrompt] = useState('');
-  const [placeholderIndex] = useState(0);
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setPlaceholderIndex((i) => (i + 1) % PROMPT_PLACEHOLDERS.length), 4500);
+    return () => window.clearInterval(id);
+  }, []);
   const [showNewTask, setShowNewTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [contextTab, setContextTab] = useState<'plan' | 'tools' | 'approvals'>('plan');
@@ -193,6 +197,11 @@ export function AgentWorkspace({
           disabled={unpaired}
         />
         <button type="submit" aria-label="Send" disabled={unpaired}><FlowIcon>➤</FlowIcon> Send</button>
+        <div className="composer-chips">
+          {PROMPT_PLACEHOLDERS.map((chip) => (
+            <button key={chip} type="button" disabled={unpaired} onClick={() => setPrompt(chip)}>{chip}</button>
+          ))}
+        </div>
       </form>
     </section>
   );

@@ -6,6 +6,7 @@ import { FlowDrawer } from './FlowDrawer';
 import { FlowIcon } from './FlowIcon';
 import { InteractiveTimeline } from './InteractiveTimeline';
 import { SessionActivityDrawerContent } from './SessionActivityDrawer';
+import { SetupStrip } from './SetupStrip';
 
 function MetricBar({ label, value }: { label: string; value: number | '—' }) {
   const n = value === '—' ? 0 : value;
@@ -122,6 +123,14 @@ export function SessionWorkspace({
             <FlowIcon>✎</FlowIcon> Edit
           </button>
         </header>
+
+        {(unpaired || (!online && !unpaired)) && (
+          <SetupStrip
+            variant={unpaired ? 'unpaired' : 'offline'}
+            onDocs={onDocs}
+            onCopied={onAnnounce}
+          />
+        )}
 
         <div className="session-main-grid">
           <aside className="glass-panel live-state-panel level-2" aria-label="Live state">
