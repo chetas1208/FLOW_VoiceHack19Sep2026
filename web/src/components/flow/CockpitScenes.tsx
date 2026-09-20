@@ -3,46 +3,56 @@ import agentScene from '../../assets/flow-agent-scene.png';
 import { FlowIcon } from './FlowIcon';
 
 export const WORKSPACE_STAGES = [
-  { label: 'Understand', symbol: '⌕' },
-  { label: 'Plan', symbol: '▤' },
-  { label: 'Implement', symbol: '</>' },
-  { label: 'Validate', symbol: '☑' },
-  { label: 'Complete', symbol: '⚑' },
+  { label: 'Understand', symbol: '⌕', detail: 'Clarify the goal and gather context from your machine.', activity: 'Reading project context' },
+  { label: 'Plan', symbol: '▤', detail: 'Break work into verifiable steps with clear checkpoints.', activity: 'Planning next steps' },
+  { label: 'Implement', symbol: '</>', detail: 'Make focused changes with evidence at each step.', activity: 'Implementing on device' },
+  { label: 'Validate', symbol: '☑', detail: 'Run tests and checks — nothing ships without proof.', activity: 'Validating changes' },
+  { label: 'Complete', symbol: '⚑', detail: 'Close the goal when evidence matches intent.', activity: 'Wrapping up session' },
 ] as const;
 
 export function SessionHeroScene({
   deviceLabel,
   sublabel,
   activity,
+  onEditorClick,
+  onDaemonClick,
 }: {
   deviceLabel: string;
   sublabel: string;
   activity?: string;
+  onEditorClick?: () => void;
+  onDaemonClick?: () => void;
 }) {
   return (
     <figure className="flow-scene session-scene" aria-label="A developer working at a multi-monitor desk">
       <img src={sessionScene} alt="" />
       <div className="scene-vignette" aria-hidden="true" />
-      <div className="scene-card editor-card"><FlowIcon>⌘</FlowIcon><span>{deviceLabel}<small>{sublabel}</small></span></div>
-      <div className="scene-card test-card"><FlowIcon>⌁</FlowIcon><span>Local FLOW<small>On your machine</small></span></div>
+      <button type="button" className="scene-card editor-card scene-card-btn" onClick={onEditorClick}>
+        <FlowIcon>⌘</FlowIcon><span>{deviceLabel}<small>{sublabel}</small></span>
+      </button>
+      <button type="button" className="scene-card test-card scene-card-btn" onClick={onDaemonClick}>
+        <FlowIcon>⌁</FlowIcon><span>Local FLOW<small>On your machine</small></span>
+      </button>
       <figcaption>GOOD THINGS TAKE FOCUS</figcaption>
       {activity && <span className="scene-state" aria-hidden="true">{activity}</span>}
     </figure>
   );
 }
 
-export function AgentHeroScene({ activity }: { activity?: string }) {
+export function AgentHeroScene({ activity, onPanelClick }: { activity?: string; onPanelClick?: () => void }) {
   return (
     <figure className="flow-scene agent-scene" aria-label="A helpful FLOW agent at a workspace">
       <img src={agentScene} alt="" />
       <div className="scene-vignette" aria-hidden="true" />
-      <div className="agent-float-card agent-analysis">
+      <button type="button" className="agent-float-card agent-analysis agent-float-btn" onClick={onPanelClick}>
         <strong><FlowIcon>✦</FlowIcon> FLOW agent</strong>
         <span>✓ &nbsp; Linked to your account</span>
         <span>○ &nbsp; Waiting for session work</span>
         <span>○ &nbsp; Tools ready on device</span>
-      </div>
-      <div className="agent-float-card agent-files"><small>▱ Your workspace</small><span>↳ Local files only</span><span>↳ Safe execute</span></div>
+      </button>
+      <button type="button" className="agent-float-card agent-files agent-float-btn" onClick={onPanelClick}>
+        <small>▱ Your workspace</small><span>↳ Local files only</span><span>↳ Safe execute</span>
+      </button>
       {activity && <span className="scene-state" aria-hidden="true">{activity}</span>}
     </figure>
   );

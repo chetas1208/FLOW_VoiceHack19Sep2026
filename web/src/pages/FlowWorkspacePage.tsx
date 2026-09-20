@@ -6,6 +6,7 @@ import { FlowIcon } from '../components/flow/FlowIcon';
 import { FlowWorkspaceHeader, type WorkspaceTab } from '../components/flow/FlowWorkspaceHeader';
 import { SessionControls } from '../components/flow/SessionControls';
 import { SessionWorkspace } from '../components/flow/SessionWorkspace';
+import { FlowToast } from '../components/flow/FlowToast';
 import { ShowcaseTab } from '../components/flow/ShowcaseTab';
 import { useFlowDevices } from '../hooks/useFlowDevices';
 import { modelStatus, pairingState } from '../lib/flowDeviceModel';
@@ -55,10 +56,19 @@ export default function FlowWorkspacePage({ account }: { account?: AccountUser }
         />
         <div className="flow-main">
           {tab === 'session' && (
-            <SessionWorkspace device={device} pairing={pairing} presence={presence} onDocs={() => setTab('docs')} />
+            <SessionWorkspace
+              device={device}
+              pairing={pairing}
+              presence={presence}
+              stopped={stopped}
+              paused={paused}
+              onDocs={() => setTab('docs')}
+              onAnnounce={setNotice}
+              onGoAgent={() => setTab('agent')}
+            />
           )}
           {tab === 'agent' && (
-            <AgentWorkspace device={device} pairing={pairing} presence={presence} onDocs={() => setTab('docs')} />
+            <AgentWorkspace device={device} pairing={pairing} presence={presence} onDocs={() => setTab('docs')} onAnnounce={setNotice} />
           )}
           {tab === 'docs' && <DocsTabPanel />}
           {tab === 'showcase' && <ShowcaseTab onAnnounce={setNotice} />}
@@ -76,7 +86,7 @@ export default function FlowWorkspacePage({ account }: { account?: AccountUser }
             onStop={() => { setStopped(true); setPaused(true); setNotice('Session stopped.'); }}
           />
         )}
-        <p className="flow-announcement" role="status" aria-live="polite">{notice}</p>
+        <FlowToast message={notice} onClear={() => setNotice('')} />
         <footer className="flow-footer">
           <button type="button" className="privacy-chip" onClick={() => setPrivacyOpen((v) => !v)}>🔒 Work data stays on your device</button>
           {privacyOpen && (
