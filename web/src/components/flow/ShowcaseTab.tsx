@@ -1,6 +1,4 @@
 import { useState, type CSSProperties, type FormEvent } from 'react';
-import sessionScene from '../../assets/flow-session-scene.png';
-import agentScene from '../../assets/flow-agent-scene.png';
 import { FlowIcon } from './FlowIcon';
 
 type PreviewView = 'session' | 'agent';
@@ -51,8 +49,9 @@ const TOOLS = [
   ['↗', 'Apply Patch'],
 ] as const;
 
-export function ShowcaseTab({ onAnnounce }: { onAnnounce: (message: string) => void }) {
+export function ShowcaseTab({ onAnnounce, onViewChange }: { onAnnounce: (message: string) => void; onViewChange?: (view: PreviewView) => void }) {
   const [view, setView] = useState<PreviewView>('session');
+  const pickView = (next: PreviewView) => { setView(next); onViewChange?.(next); };
   const [stageIndex, setStageIndex] = useState(2);
   const [paused, setPaused] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -68,8 +67,8 @@ export function ShowcaseTab({ onAnnounce }: { onAnnounce: (message: string) => v
     <div className="showcase-root" aria-label="Interactive product preview">
       <p className="showcase-banner">Sample session and agent data for exploration. Session and Agent tabs reflect your linked device.</p>
       <div className="showcase-switch" role="tablist" aria-label="Preview view">
-        <button type="button" role="tab" aria-selected={view === 'session'} className={view === 'session' ? 'is-active' : ''} onClick={() => setView('session')}>Session preview</button>
-        <button type="button" role="tab" aria-selected={view === 'agent'} className={view === 'agent' ? 'is-active' : ''} onClick={() => setView('agent')}>Agent preview</button>
+        <button type="button" role="tab" aria-selected={view === 'session'} className={view === 'session' ? 'is-active' : ''} onClick={() => pickView('session')}>Session preview</button>
+        <button type="button" role="tab" aria-selected={view === 'agent'} className={view === 'agent' ? 'is-active' : ''} onClick={() => pickView('agent')}>Agent preview</button>
       </div>
       <div className="showcase-body">
         {view === 'session' ? (
@@ -87,8 +86,8 @@ export function ShowcaseTab({ onAnnounce }: { onAnnounce: (message: string) => v
               stopped={stopped}
               onPause={() => { setPaused((v) => !v); setStopped(false); onAnnounce(paused ? 'Session resumed.' : 'Session paused.'); }}
               onMute={() => { setMuted((v) => !v); onAnnounce(muted ? 'FLOW audio unmuted.' : 'FLOW audio muted.'); }}
-              onAsk={() => { setView('agent'); onAnnounce('FLOW is ready for your direction.'); }}
-              onDelegate={() => { setView('agent'); onAnnounce('Delegation workspace opened.'); }}
+              onAsk={() => { pickView('agent'); onAnnounce('FLOW is ready for your direction.'); }}
+              onDelegate={() => { pickView('agent'); onAnnounce('Delegation workspace opened.'); }}
               onStop={() => { setStopped(true); setPaused(true); onAnnounce('Session stopped.'); }}
             />
           </>
@@ -117,16 +116,15 @@ function SessionPreview({
   const detail = stopped ? 'Choose a stage to continue your session.' : stage.detail;
 
   return (
-    <section className="session-workspace" aria-label="Session preview">
+    <section className="session-workspace cockpit-overlay" aria-label="Session preview">
       <GoalPanel />
-      <section className="session-center" aria-label="Current session stage">
+      <section className="glass-panel session-head-panel" aria-label="Current session stage">
         <div className="stage-title">
           <small>{`Stage ${stageIndex + 1} of ${STAGES.length}`}</small>
           <h1>{title}</h1>
           <p>{detail}</p>
         </div>
         <StageRail current={stageIndex} onSelect={onSelectStage} />
-        <Scene image={sessionScene} type="session" stage={stage} />
       </section>
       <InsightPanel stage={stage} onAnnounce={onAnnounce} />
       <Timeline />
@@ -170,29 +168,6 @@ function StageRail({ current, onSelect }: { current: number; onSelect: (index: n
         </li>
       ))}
     </ol>
-  );
-}
-
-function Scene({ image, type, stage }: { image: string; type: 'session' | 'agent'; stage: Stage }) {
-  const isSession = type === 'session';
-  return (
-    <figure className={`flow-scene ${type}-scene`} aria-label={isSession ? 'A developer working at a multi-monitor desk' : 'A helpful FLOW agent at a workspace'}>
-      <img src={image} alt="" /><div className="scene-vignette" aria-hidden="true" />
-      {isSession ? (
-        <>
-          <div className="scene-card editor-card"><FlowIcon>⌘</FlowIcon><span>Visual Studio Code<small>Active · 42m</small></span></div>
-          <div className="scene-card test-card"><FlowIcon>⚠</FlowIcon><span>Running Tests<small>3 failing</small></span></div>
-          <div className="monitor-copy" aria-hidden="true"><small>pytest</small><b>3 failed, 18 passed</b><em>in 12.4s</em></div>
-          <figcaption>GOOD THINGS TAKE FOCUS</figcaption>
-        </>
-      ) : (
-        <>
-          <div className="agent-float-card agent-analysis"><strong><FlowIcon>✦</FlowIcon> Analyzing...</strong><span>✓ &nbsp; Reading test output</span><span>✓ &nbsp; Inspecting code</span><span>○ &nbsp; Identifying root cause</span><span>○ &nbsp; Proposing fix</span><span>○ &nbsp; Ready for review</span><span>○ &nbsp; Verify and complete</span></div>
-          <div className="agent-float-card agent-files"><small>▱ Services/auth/</small><span>↳ token.py</span><span>↳ middleware.py</span><span>↳ test_auth.py</span><span>↳ utils.py</span></div>
-        </>
-      )}
-      <span className="scene-state" aria-hidden="true">{stage.activity}</span>
-    </figure>
   );
 }
 
@@ -248,11 +223,11 @@ function AgentPreview({ stage, onAnnounce }: { stage: Stage; onAnnounce: (messag
   const displayedTasks = filter === 'all' ? TASKS : TASKS.filter((task) => task.kind === filter);
   const submitPrompt = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (!prompt.trim()) return; onAnnounce(`FLOW received: ${prompt.trim()}`); setPrompt(''); };
   const agentLine = selectedTask === 0
-    ? 'I found 3 failing tests in the authentication suite. The error appears to be an expiration timestamp mismatch. Let me inspect the relevant code.'
+    ? stage.insight
     : `${TASKS[selectedTask]!.title} is ready for review.`;
 
   return (
-    <section className="agent-workspace" aria-label="Agent preview">
+    <section className="agent-workspace cockpit-overlay" aria-label="Agent preview">
       <aside className="glass-panel task-panel">
         <header><h1>Agent Tasks</h1><button type="button" onClick={() => onAnnounce('New task form is ready.')}>＋ New Task</button></header>
         <div className="task-filters" role="tablist" aria-label="Task filters">
@@ -274,9 +249,8 @@ function AgentPreview({ stage, onAnnounce }: { stage: Stage; onAnnounce: (messag
         </div>
         <blockquote>“Delegate the routine.<br />Focus on what matters.”<small>— FLOW</small></blockquote>
       </aside>
-      <section className="agent-center">
-        <div className="agent-title"><h1>Your AI pair programmer and productivity partner</h1><p>Understand. Plan. Execute. Verify. Together.</p></div>
-        <Scene image={agentScene} type="agent" stage={stage} />
+      <section className="agent-center agent-center-overlay">
+        <div className="glass-panel agent-title-card"><h1>Your AI pair programmer and productivity partner</h1><p>Understand. Plan. Execute. Verify. Together.</p></div>
         <section className="agent-response glass-panel">
           <header><strong><FlowIcon>✦</FlowIcon> FLOW</strong><time>{new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</time></header>
           <p>{agentLine}</p>

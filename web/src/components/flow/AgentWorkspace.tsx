@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import type { FlowDevice } from '../../lib/account';
 import { daemonStatus, modelStatus, pairingState, presenceLabel, type PresenceState } from '../../lib/flowDeviceModel';
-import { AgentHeroScene } from './CockpitScenes';
 import { FlowIcon } from './FlowIcon';
 
 const TOOLS = [
@@ -74,7 +73,13 @@ export function AgentWorkspace({
   };
 
   return (
-    <section className="agent-workspace" aria-label="Agent workspace">
+    <section className="agent-workspace cockpit-overlay" aria-label="Agent workspace">
+      <div className="cockpit-float-layer agent-float-layer" aria-hidden="true">
+        <button type="button" className="agent-float-card agent-analysis agent-float-btn cockpit-float" onClick={() => onAnnounce('Agent runs on your linked device — nothing executes in the cloud.')}>
+          <strong><FlowIcon>✦</FlowIcon> FLOW agent</strong>
+          <span>{online ? '✓ Ready on device' : '○ Standby'}</span>
+        </button>
+      </div>
       <aside className="glass-panel task-panel">
         <header>
           <h1>Agent Tasks</h1>
@@ -109,15 +114,11 @@ export function AgentWorkspace({
         <blockquote>“Delegate the routine.<br />Focus on what matters.”<small>— FLOW</small></blockquote>
       </aside>
 
-      <section className="agent-center">
-        <div className="agent-title">
+      <section className="agent-center agent-center-overlay">
+        <div className="glass-panel agent-title-card">
           <h1>Your AI pair programmer and productivity partner</h1>
           <p>Understand. Plan. Execute. Verify. Together.</p>
         </div>
-        <AgentHeroScene
-          activity={online ? 'Ready on device' : 'Standby'}
-          onPanelClick={() => onAnnounce('Agent runs on your linked device — nothing executes in the cloud.')}
-        />
         <section className="agent-response glass-panel">
           <header><strong><FlowIcon>✦</FlowIcon> FLOW</strong><time>{new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</time></header>
           <p>{agentLine}</p>

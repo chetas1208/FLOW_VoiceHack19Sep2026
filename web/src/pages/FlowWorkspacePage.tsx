@@ -8,6 +8,7 @@ import { SessionControls } from '../components/flow/SessionControls';
 import { SessionWorkspace } from '../components/flow/SessionWorkspace';
 import { FlowToast } from '../components/flow/FlowToast';
 import { ShowcaseTab } from '../components/flow/ShowcaseTab';
+import { CockpitBackdrop } from '../components/flow/CockpitBackdrop';
 import { useFlowDevices } from '../hooks/useFlowDevices';
 import { modelStatus, pairingState } from '../lib/flowDeviceModel';
 import type { AccountUser } from '../lib/flowWorkspaceUi';
@@ -27,6 +28,7 @@ export default function FlowWorkspacePage({ account }: { account?: AccountUser }
   const [paused, setPaused] = useState(false);
   const [muted, setMuted] = useState(false);
   const [stopped, setStopped] = useState(false);
+  const [showcaseView, setShowcaseView] = useState<'session' | 'agent'>('session');
 
   const setTab = useCallback((next: WorkspaceTab) => {
     if (next === 'session') setParams({});
@@ -37,15 +39,27 @@ export default function FlowWorkspacePage({ account }: { account?: AccountUser }
     if (window.location.pathname.startsWith('/docs')) setParams({ tab: 'docs' }, { replace: true });
   }, [setParams]);
 
+  useEffect(() => {
+    if (tab !== 'showcase') setShowcaseView('session');
+  }, [tab]);
+
   const health = device?.presence.health ?? {};
   const footerModels = presence === 'online'
     ? [modelStatus(health.model), 'Kokoro TTS'].filter(Boolean)
     : ['Local models on your device'];
 
+  const immersive = tab === 'session' || tab === 'agent' || tab === 'showcase';
+
   return (
-    <main className="flow-workspace" aria-label="FLOW workspace">
-      <div className="flow-atmosphere" aria-hidden="true" />
-      <div className={`flow-shell app-shell ${tab === 'agent' ? 'is-agent-view' : ''} ${tab === 'docs' ? 'is-docs-view' : ''} ${tab === 'showcase' ? 'is-showcase-view' : ''}`}>
+    <main className={`flow-workspace${immersive ? ' is-immersive' : ''}`} aria-label="FLOW workspace">
+      {!immersive && <div className="flow-atmosphere" aria-hidden="true" />}
+      <div className={`flow-shell app-shell ${tab === 'agent' ? 'is-agent-view' : ''} ${tab === 'docs' ? 'is-docs-view' : ''} ${tab === 'showcase' ? 'is-showcase-view' : ''}${immersive ? ' is-immersive-shell' : ''}`}>
+        {immersive && (
+          <CockpitBackdrop
+            variant={tab === 'agent' || (tab === 'showcase' && showcaseView === 'agent') ? 'agent' : 'session'}
+            key={`${tab}-${showcaseView}`}
+          />
+        )}
         <FlowWorkspaceHeader
           tab={tab}
           onTabChange={setTab}
@@ -71,7 +85,7 @@ export default function FlowWorkspacePage({ account }: { account?: AccountUser }
             <AgentWorkspace device={device} pairing={pairing} presence={presence} onDocs={() => setTab('docs')} onAnnounce={setNotice} />
           )}
           {tab === 'docs' && <DocsTabPanel />}
-          {tab === 'showcase' && <ShowcaseTab onAnnounce={setNotice} />}
+          {tab === 'showcase' && <ShowcaseTab onAnnounce={setNotice} onViewChange={setShowcaseView} />}
         </div>
         {tab === 'session' && pairing === 'paired' && (
           <SessionControls

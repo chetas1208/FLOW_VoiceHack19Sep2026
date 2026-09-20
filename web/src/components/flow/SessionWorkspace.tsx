@@ -1,7 +1,7 @@
 import { useCallback, useState, type CSSProperties } from 'react';
 import type { FlowDevice } from '../../lib/account';
 import { ago, daemonStatus, pairingState, presenceLabel, type PresenceState } from '../../lib/flowDeviceModel';
-import { SessionHeroScene, WORKSPACE_STAGES } from './CockpitScenes';
+import { WORKSPACE_STAGES } from './CockpitScenes';
 import { FlowIcon } from './FlowIcon';
 import { InteractiveTimeline } from './InteractiveTimeline';
 
@@ -104,7 +104,15 @@ export function SessionWorkspace({
   };
 
   return (
-    <section className="session-workspace" aria-label="Session workspace">
+    <section className="session-workspace cockpit-overlay" aria-label="Session workspace">
+      <div className="cockpit-float-layer" aria-hidden="true">
+        <button type="button" className="scene-card editor-card scene-card-btn cockpit-float" onClick={() => onAnnounce(unpaired ? 'Link a device to mirror your workspace.' : `${sceneLabel}: ${sceneSub}`)}>
+          <FlowIcon>⌘</FlowIcon><span>{sceneLabel}<small>{sceneSub}</small></span>
+        </button>
+        <button type="button" className="scene-card test-card scene-card-btn cockpit-float" onClick={() => onAnnounce(online ? 'Daemon connected on your device.' : 'Run flow daemon start on your linked machine.')}>
+          <FlowIcon>⌁</FlowIcon><span>Local FLOW<small>{sceneActivity}</small></span>
+        </button>
+      </div>
       <aside className="glass-panel goal-panel">
         {unpaired && (
           <p className="connect-banner">Run <code>flow login</code> on your computer, then approve this browser.</p>
@@ -155,14 +163,14 @@ export function SessionWorkspace({
         <blockquote>“Consistent steps<br />create extraordinary results.”<small>— FLOW</small></blockquote>
       </aside>
 
-      <section className="session-center" aria-label="Session focus">
+      <section className="glass-panel session-head-panel" aria-label="Session focus">
         <div className="stage-title">
           <small>{unpaired ? 'Setup' : `Stage ${stageIndex + 1} of ${WORKSPACE_STAGES.length}`}</small>
           <h1>{title}</h1>
           <p>{detail}</p>
         </div>
         {!unpaired && (
-          <ol className="stage-rail" aria-label="Session stages">
+          <ol className="stage-rail stage-rail-compact" aria-label="Session stages">
             {WORKSPACE_STAGES.map((item, index) => (
               <li key={item.label} className={index === stageIndex ? 'is-current' : index < stageIndex ? 'is-complete' : ''}>
                 <button type="button" onClick={() => selectStage(index)} aria-current={index === stageIndex ? 'step' : undefined} aria-label={`${item.label} stage`}>
@@ -173,13 +181,6 @@ export function SessionWorkspace({
             ))}
           </ol>
         )}
-        <SessionHeroScene
-          deviceLabel={sceneLabel}
-          sublabel={sceneSub}
-          activity={sceneActivity}
-          onEditorClick={() => onAnnounce(unpaired ? 'Link a device to mirror your workspace.' : `${sceneLabel}: ${sceneSub}`)}
-          onDaemonClick={() => onAnnounce(online ? 'Daemon connected on your device.' : 'Run flow daemon start on your linked machine.')}
-        />
       </section>
 
       <aside className="glass-panel insight-panel">
