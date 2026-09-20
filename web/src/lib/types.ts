@@ -233,14 +233,6 @@ export interface LiveView {
 
 export interface Page<T> { items: T[]; next_cursor?: string | null }
 
-export interface CliAuthRequest {
-  id: string;
-  status: 'pending' | 'approved' | 'denied' | 'expired' | string;
-  device: { name: string; os: string; architecture: string; flow_version: string };
-  user_code: string;
-  expires_at: string;
-}
-
 // Report: the contract lists sections but not exact field names, so every field is optional and read defensively.
 export interface SessionReport {
   goal?: string;

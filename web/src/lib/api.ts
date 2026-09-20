@@ -1,7 +1,7 @@
 import { auth } from '../auth/auth';
 import { config } from '../config';
 import type {
-  ActionApproval, CliAuthRequest, Device, Entity, FlowEvent, LiveView, Page, SessionCommand, SessionOut, SessionReport,
+  ActionApproval, Device, Entity, FlowEvent, LiveView, Page, SessionCommand, SessionOut, SessionReport,
 } from './types';
 
 export class ApiError extends Error {
@@ -64,17 +64,4 @@ export const api = {
   approvals: () => request<{ items: ActionApproval[] }>('/approvals', { query: { status: 'pending' } }),
   sendCommand: (body: { command_id: string; type: string; session_id?: string; device_id?: string; payload: Record<string, unknown>; source: 'web' }) =>
     request<SessionCommand & { session_id?: string }>('/commands', { method: 'POST', body }),
-  cliRequest: (id: string) => request<CliAuthRequest>(`/cli/auth/requests/${encodeURIComponent(id)}`),
-  cliApprove: (id: string) => request<{ status: string }>(`/cli/auth/requests/${encodeURIComponent(id)}/approve`, { method: 'POST', body: {} }),
-  cliDeny: (id: string) => request<{ status: string }>(`/cli/auth/requests/${encodeURIComponent(id)}/deny`, { method: 'POST', body: {} }),
 };
-
-export async function devLogin(email: string): Promise<string> {
-  let res: Response;
-  try {
-    res = await fetch(`${config.apiUrl}/v1/dev/login`, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
-  } catch { throw new ApiError(0, 'network_error', `Cannot reach the FLOW API at ${config.apiUrl}.`); }
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, json.error ?? 'error', json.message ?? 'Sign-in failed.');
-  return json.access_token as string;
-}

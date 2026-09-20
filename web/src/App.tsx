@@ -7,7 +7,6 @@ import { OidcCallbackPage } from './pages/OidcCallbackPage';
 import { DevicesPage } from './pages/DevicesPage';
 import { SessionsPage } from './pages/SessionsPage';
 import { StartSessionPage } from './pages/StartSessionPage';
-import { CliAuthPage } from './pages/CliAuthPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { AccountPage } from './pages/AccountPage';
 import { AuthenticatedFlowPage } from './pages/AuthenticatedFlowPage';
@@ -41,7 +40,6 @@ export function App() {
             <Route path="/sessions" element={<SessionsPage />} />
             <Route path="/sessions/new" element={<StartSessionPage />} />
             <Route path="/devices" element={<DevicesPage />} />
-            <Route path="/cli/auth" element={<CliAuthPage />} />
             <Route path="/session/:id" element={<CockpitPage />} />
             <Route path="/session/:id/report" element={<ReportPage />} />
             <Route path="*" element={<NotFoundPage />} />
