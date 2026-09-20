@@ -7,7 +7,12 @@ export type FlowDevice = {
   created_at: string;
   last_seen_at: string | null;
   revoked_at: string | null;
-  presence: { state: 'online' | 'degraded' | 'offline'; last_heartbeat_at: string | null; health: Record<string, string> };
+  presence: {
+    state: 'online' | 'degraded' | 'offline';
+    last_heartbeat_at: string | null;
+    health: Record<string, string>;
+    active_sessions?: string[];
+  };
 };
 
 export class AccountApiError extends Error {

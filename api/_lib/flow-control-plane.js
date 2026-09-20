@@ -118,7 +118,7 @@ function sha256(value) {
 
 function cleanHealth(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  const allowed = new Set(['daemon', 'observer', 'agent', 'intelligence', 'voice', 'model']);
+  const allowed = new Set(['daemon', 'observer', 'agent', 'intelligence', 'voice', 'model', 'session_id', 'session_status', 'session_goal']);
   const result = {};
   for (const [key, item] of Object.entries(value)) {
     if (allowed.has(key) && typeof item === 'string' && item.length <= 64) result[key] = item;
@@ -322,10 +322,10 @@ export async function cliIdentity(req) {
 
 async function devicesForUser(userId) {
   const result = await database().query(
-    "select d.id, d.name, d.os, d.architecture, d.flow_version, d.created_at, d.last_seen_at, d.revoked_at, coalesce(p.health, '{}'::jsonb) as health, p.last_heartbeat_at, case when p.last_heartbeat_at is null or p.last_heartbeat_at < now() - interval '90 seconds' then 'offline' else p.state end as state from flow_devices d left join flow_device_presence p on p.device_id = d.id where d.user_id = $1 order by d.last_seen_at desc nulls last, d.created_at desc",
+    "select d.id, d.name, d.os, d.architecture, d.flow_version, d.created_at, d.last_seen_at, d.revoked_at, coalesce(p.health, '{}'::jsonb) as health, p.last_heartbeat_at, coalesce(p.active_sessions, '{}') as active_sessions, case when p.last_heartbeat_at is null or p.last_heartbeat_at < now() - interval '90 seconds' then 'offline' else p.state end as state from flow_devices d left join flow_device_presence p on p.device_id = d.id where d.user_id = $1 order by d.last_seen_at desc nulls last, d.created_at desc",
     [userId],
   );
-  return { items: result.rows.map((row) => ({ id: row.id, name: row.name, os: row.os, architecture: row.architecture, flow_version: row.flow_version, created_at: row.created_at, last_seen_at: row.last_seen_at, revoked_at: row.revoked_at, presence: { state: row.state, last_heartbeat_at: row.last_heartbeat_at, health: row.health } })) };
+  return { items: result.rows.map((row) => ({ id: row.id, name: row.name, os: row.os, architecture: row.architecture, flow_version: row.flow_version, created_at: row.created_at, last_seen_at: row.last_seen_at, revoked_at: row.revoked_at, presence: { state: row.state, last_heartbeat_at: row.last_heartbeat_at, health: row.health, active_sessions: Array.isArray(row.active_sessions) ? row.active_sessions : [] } })) };
 }
 
 export async function listDevices(req) {

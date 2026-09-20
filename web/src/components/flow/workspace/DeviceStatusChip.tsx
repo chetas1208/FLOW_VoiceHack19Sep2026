@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FlowDevice } from '../../../lib/account';
+import { syncedSessionFromDevice } from '../../../lib/deviceSessionSync';
 import { ago, daemonStatus, modelStatus, presenceLabel, pairingState, type PresenceState } from '../../../lib/flowDeviceModel';
 import { presenceTone } from '../../../lib/flowWorkspaceUi';
 
@@ -19,6 +20,7 @@ export function DeviceStatusChip({
   const paired = pairing === 'paired';
   const lastBeat = device?.presence.last_heartbeat_at ?? device?.last_seen_at;
   const deviceName = device?.name ?? 'No device';
+  const synced = syncedSessionFromDevice(device, presence);
 
   useEffect(() => {
     if (!open) return;
@@ -49,8 +51,11 @@ export function DeviceStatusChip({
             <div><dt>Connected</dt><dd>{paired ? presenceLabel(presence) : '—'}</dd></div>
             <div><dt>Daemon</dt><dd>{paired ? daemonStatus(health.daemon, presence) : '—'}</dd></div>
             <div><dt>Model</dt><dd>{paired ? modelStatus(health.model) : '—'}</dd></div>
-            <div><dt>Last heartbeat</dt><dd>{paired ? ago(lastBeat ?? null) : '—'}</dd></div>
-          </dl>
+                <div><dt>Last heartbeat</dt><dd>{paired ? ago(lastBeat ?? null) : '—'}</dd></div>
+                {synced.goal && (
+                  <div className="device-popover-session"><dt>Session</dt><dd>{synced.goal}</dd></div>
+                )}
+              </dl>
         </div>
       )}
     </div>

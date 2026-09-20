@@ -119,8 +119,33 @@ def run(args) -> int:
     return 0
 
 
+def _session_already_active_help() -> None:
+    print("flow: a FLOW session is already active", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("  flow status              show the current session", file=sys.stderr)
+    print("  flow stop                end it", file=sys.stderr)
+    print('  flow start "new goal"    start again after stop', file=sys.stderr)
+
+
+def _resolve_daemon_session_id(explicit: str | None, call) -> str:
+    """Prefer the session bound to this daemon, not every stale row in the store."""
+    if explicit:
+        return explicit
+    bound = (call("status", {}).get("session") or {}).get("id")
+    if bound:
+        return str(bound)
+    sessions = call("session.list", {}).get("sessions", [])
+    active = [item for item in sessions if item.get("status") in {"active", "paused"}]
+    if len(active) == 1:
+        return str(active[0]["id"])
+    if not active:
+        raise ValueError("no active FLOW session")
+    ids = ", ".join(str(item["id"]) for item in active[:4])
+    raise ValueError(f"multiple sessions in store ({ids}). Pass --session ID, or flow stop the daemon session first")
+
+
 def _daemon_session_command(args) -> int:
-    from ..remote.ipc_client import call, ensure_daemon
+    from ..remote.ipc_client import DaemonUnavailable, IpcError, call, ensure_daemon
     try:
         ensure_daemon()
         if args.command == "start":
@@ -129,18 +154,21 @@ def _daemon_session_command(args) -> int:
                 raise ValueError("start requires a goal")
             result = call("session.start", {"goal": goal})
         else:
-            session_id = getattr(args, "session", None)
-            if not session_id:
-                sessions = call("session.list", {}).get("sessions", [])
-                active = [item for item in sessions if item.get("status") in {"active", "paused"}]
-                if len(active) != 1:
-                    raise ValueError("specify --session unless exactly one active session exists")
-                session_id = active[0]["id"]
+            session_id = _resolve_daemon_session_id(getattr(args, "session", None), call)
             result = call({"stop": "session.stop", "pause": "session.pause", "resume": "session.resume",
                            "status": "session.status"}[args.command], {"session_id": session_id})
         session = result.get("session", result)
         print(f"FLOW SESSION\n\nID        {session.get('id')}\nGoal      {session.get('goal')}\nStatus    {session.get('status')}")
         return 0
+    except DaemonUnavailable as exc:
+        print(f"flow: {exc}", file=sys.stderr)
+        return 3
+    except IpcError as exc:
+        if "already active" in str(exc).lower():
+            _session_already_active_help()
+            return 2
+        print(f"flow: {exc}", file=sys.stderr)
+        return 2
     except (ValueError, RuntimeError) as exc:
         print(f"flow: {exc}", file=sys.stderr)
         return 2

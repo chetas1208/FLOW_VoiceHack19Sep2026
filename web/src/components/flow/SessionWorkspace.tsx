@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { FlowDevice } from '../../lib/account';
-import { pairingState, type PresenceState } from '../../lib/flowDeviceModel';
+import { syncedSessionFromDevice } from '../../lib/deviceSessionSync';
+import { daemonStatus, pairingState, type PresenceState } from '../../lib/flowDeviceModel';
 import { WORKSPACE_STAGES } from './CockpitScenes';
 import { FlowDrawer } from './FlowDrawer';
 import { FlowIcon } from './FlowIcon';
@@ -40,7 +41,9 @@ export function SessionWorkspace({
 }) {
   const unpaired = pairing === 'unpaired' || pairing === 'revoked';
   const online = pairing === 'paired' && presence === 'online';
-  const sessionActive = online && !stopped && !paused;
+  const synced = syncedSessionFromDevice(device, presence);
+  const daemonRunning = online && device?.presence.health?.daemon === 'running';
+  const sessionActive = daemonRunning && synced.live && !stopped && !paused;
   const [stageIndex, setStageIndex] = useState(0);
   const [goalDraft, setGoalDraft] = useState('');
   const [editingGoal, setEditingGoal] = useState(false);
@@ -55,11 +58,13 @@ export function SessionWorkspace({
 
   const goalText = goalDraft.trim()
     ? goalDraft
-    : unpaired
-      ? 'Link your device to start a session'
-      : online
-        ? 'Set a goal with flow start on your device'
-        : 'Start the daemon, then flow start "your goal"';
+    : synced.goal
+      ? synced.goal
+      : unpaired
+        ? 'Link your device to start a session'
+        : online && daemonRunning
+          ? 'Set a goal with flow start on your device'
+          : 'Start the daemon, then flow start "your goal"';
 
   const stageLine = unpaired
     ? 'Setup'
@@ -69,7 +74,15 @@ export function SessionWorkspace({
         ? 'Paused'
         : `Stage ${stageIndex + 1} of ${WORKSPACE_STAGES.length} · ${stage.label}`;
 
-  const sessionMeta = sessionActive ? 'Session active on device' : online ? 'Linked · no active session' : unpaired ? 'Not linked' : 'Device linked · offline';
+  const sessionMeta = sessionActive
+    ? `Session active · ${synced.status ?? 'live'}`
+    : synced.live && online
+      ? 'Session on device · open Session tab refreshes from heartbeat'
+      : online
+        ? `Linked · ${daemonStatus(device?.presence.health?.daemon, presence)}`
+        : unpaired
+          ? 'Not linked'
+          : 'Device linked · offline';
 
   const currentActivity = unpaired
     ? 'Waiting to link'

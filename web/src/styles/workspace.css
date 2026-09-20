@@ -259,6 +259,8 @@ body:has(.flow-workspace)::before { display: none; }
 .device-popover-list div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line-soft); padding-bottom: 6px; }
 .device-popover-list dt { color: #b5b0a9; font-weight: 400; }
 .device-popover-list dd { margin: 0; color: #f0ebe6; }
+.device-popover-session { grid-column: 1 / -1; padding-top: 6px; border-top: 1px solid var(--line-soft); }
+.device-popover-session dd { text-align: left; line-height: 1.35; font-size: 12px; }
 .account-popover { display: grid; gap: 6px; }
 .account-popover-id { margin: 0 0 8px; display: grid; gap: 2px; font-size: 13px; }
 .account-popover-id small { color: #b5b0a9; }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import platform
@@ -62,6 +63,8 @@ class FlowDaemon:
             session = self.manager.start_session(goal, metadata={"daemon_pid": os.getpid()})
             self.session_id = session.id
             self._start_runtime(session.id)
+            from .account.heartbeat_sync import push_heartbeat
+            push_heartbeat(self)
             return {"session": session.to_dict()}
         if command in {"session.stop", "session.pause", "session.resume"}:
             session_id = str(args.get("session_id") or self.session_id or "")
@@ -75,6 +78,8 @@ class FlowDaemon:
                 if self.runtime:
                     self.runtime.stop()
                 self.session_id = None
+            from .account.heartbeat_sync import push_heartbeat
+            push_heartbeat(self)
             return {"session": session.to_dict()}
         if command == "session.list":
             return {"sessions": [session.to_dict() for session in self.manager.list_sessions()]}
@@ -133,11 +138,18 @@ class FlowDaemon:
         self.server = await asyncio.start_unix_server(self.handle, path=self.socket)
         self.socket.chmod(0o600)
         self.pid.write_text(str(os.getpid())); self.pid.chmod(0o600)
+        from .account.heartbeat_sync import heartbeat_loop, push_heartbeat
+        push_heartbeat(self)
+        pulse = asyncio.create_task(heartbeat_loop(self), name="flow-account-heartbeat")
         try:
             async with self.server:
                 await self.server.serve_forever()
         finally:
-            self.socket.unlink(missing_ok=True); self.pid.unlink(missing_ok=True)
+            pulse.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await pulse
+            self.socket.unlink(missing_ok=True)
+            self.pid.unlink(missing_ok=True)
 
 
 async def request(command: str, socket: Path | None = None, args: dict[str, Any] | None = None) -> dict[str, Any]:

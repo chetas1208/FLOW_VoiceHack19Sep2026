@@ -3,7 +3,7 @@ import { accountApi, type FlowDevice } from '../lib/account';
 import { pickPrimaryDevice, type PresenceState } from '../lib/flowDeviceModel';
 import { readPreferredDeviceId, writePreferredDeviceId } from '../lib/pairedDeviceStore';
 
-const ONLINE_POLL_MS = 15_000;
+const ONLINE_POLL_MS = 12_000;
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 15_000];
 
 function jitter(ms: number) {
