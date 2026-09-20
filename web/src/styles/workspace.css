@@ -443,3 +443,81 @@ body:has(.flow-workspace)::before { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+
+/* Real workspace composition: the live tabs should carry the same visual
+   confidence as the product preview without inventing session evidence. */
+.session-workspace-v2 {
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: min(78vh, 760px);
+  gap: clamp(10px, 1.2vh, 16px);
+}
+.session-main-grid {
+  grid-template-columns: minmax(250px, 300px) minmax(0, 1fr) minmax(260px, 340px);
+  min-height: min(62vh, 610px);
+  gap: clamp(10px, 1.2vw, 18px);
+}
+.session-goal-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 18px 20px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(14, 14, 14, .48), rgba(8, 9, 10, .28)) !important;
+}
+.goal-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.session-goal-panel h2 { margin: 8px 0 0; font-size: clamp(23px, 2.35vw, 32px); line-height: 1.1; font-weight: 500; letter-spacing: -.035em; }
+.session-goal-panel .session-goal-meta { min-height: 38px; margin-top: 9px; }
+.session-goal-panel .goal-edit-btn { min-height: 34px; padding: 5px 10px; font-size: 12px; }
+.goal-score-summary { display: flex; align-items: center; gap: 14px; margin: 16px 0 14px; padding: 13px 0; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+.goal-score-summary > div:last-child { display: grid; gap: 3px; }
+.goal-score-summary strong { font-size: 13px; font-weight: 500; }
+.goal-score-summary small { color: #aaa39b; font-size: 11px; line-height: 1.35; }
+.score-ring { display: grid; place-items: center; flex: none; width: 66px; height: 66px; border-radius: 50%; background: radial-gradient(circle at center, rgba(11, 12, 13, .92) 54%, transparent 56%), conic-gradient(var(--mint) 0deg, rgba(255,255,255,.1) 0deg); box-shadow: 0 0 20px rgba(53, 233, 163, .16); }
+.score-ring span { font: 500 23px var(--mono); color: #f4eee8; }
+.goal-metric-list { display: grid; gap: 4px; }
+.goal-metric-list .metric-bar { margin: 5px 0; }
+.goal-metric-list .metric-bar-track { background: rgba(255,255,255,.08); }
+.goal-quote { margin-top: auto; padding-top: 18px; border-top: 1px solid var(--line-soft); color: #ada69f; font-size: 12px; line-height: 1.55; text-align: center; }
+.goal-quote span { color: #d5c2a8; }
+.session-stage-spine { min-height: min(62vh, 610px); gap: 10px; }
+.session-stage-spine > .setup-strip { flex: none; }
+.session-stage-spine .stage-rail-inline { flex: none; margin: 0; padding: 8px 10px; }
+.session-stage-spine .cockpit-float-layer { min-height: 0; flex: 1; }
+.session-stage-spine .cockpit-float-layer::after { content: 'GOOD THINGS TAKE FOCUS'; position: absolute; right: 18%; bottom: 4%; left: 18%; color: rgba(229, 173, 102, .78); font-size: 10px; letter-spacing: .22em; text-align: center; }
+.insight-panel { display: flex; flex-direction: column; min-height: 0; padding: 20px; }
+.insight-panel > p { color: #eee8e1; font-size: 15px; line-height: 1.45; }
+.insight-panel .evidence-list { margin: 18px 0 0; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+.insight-panel .primary-action { width: 100%; min-height: 46px; margin-top: auto; }
+.insight-panel .next-action-title { margin: 18px 0 0; color: var(--gold-bright); font-size: 15px; }
+.is-immersive-shell .session-goal-panel { background: rgba(8, 10, 12, .28) !important; }
+
+.agent-workspace-v2 {
+  grid-template-rows: auto minmax(420px, 1fr) auto auto;
+  min-height: min(78vh, 760px);
+  gap: clamp(10px, 1.2vh, 16px);
+}
+.agent-main-grid { min-height: 420px; }
+.agent-context-bar { max-height: none; min-height: 116px; }
+.agent-composer-bar { min-height: 92px; }
+.agent-core-spine { min-height: 420px; }
+.agent-float-layer .agent-analysis { top: 37%; left: 28%; }
+.task-queue-panel, .active-task-panel { padding: 18px; }
+.task-queue-panel { background: linear-gradient(180deg, rgba(14, 14, 14, .48), rgba(8, 9, 10, .28)) !important; }
+.active-task-panel { background: linear-gradient(180deg, rgba(14, 14, 14, .42), rgba(8, 9, 10, .24)) !important; }
+
+@media (max-width: 980px) {
+  .session-workspace-v2, .agent-workspace-v2 { min-height: 0; }
+  .session-main-grid, .agent-main-grid { min-height: 0; }
+  .session-goal-panel { min-height: 360px; }
+  .session-stage-spine, .agent-core-spine { min-height: 420px; }
+}
+@media (max-width: 680px) {
+  .session-goal-panel { min-height: 0; }
+  .session-stage-spine, .agent-core-spine { min-height: 330px; }
+  .session-stage-spine .setup-strip { padding: 12px; }
+  .session-stage-spine .setup-strip-actions { grid-template-columns: 1fr; }
+  .goal-quote { margin-top: 18px; }
+  .agent-workspace-v2 { grid-template-rows: auto auto auto auto; }
+  .agent-main-grid { min-height: 0; }
+  .agent-context-bar { min-height: 140px; }
+}
