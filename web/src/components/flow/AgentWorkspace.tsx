@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { FlowDevice } from '../../lib/account';
-import { pairingState, presenceLabel, type PresenceState } from '../../lib/flowDeviceModel';
+import { modelStatus, pairingState, type PresenceState } from '../../lib/flowDeviceModel';
 import { FlowIcon } from './FlowIcon';
 
 const TOOLS = [
@@ -60,6 +60,7 @@ export function AgentWorkspace({
   const [pendingApproval] = useState(0);
 
   const phase: AgentPhase = unpaired ? 'standby' : online ? 'standby' : 'standby';
+  const health = device?.presence.health ?? {};
 
   const submitPrompt = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -91,8 +92,18 @@ export function AgentWorkspace({
             <h2>Task queue</h2>
             <button type="button" disabled={unpaired} onClick={() => { setShowNewTask((v) => !v); onAnnounce(showNewTask ? 'Task form closed.' : 'Describe a task to queue.'); }}>＋ New</button>
           </header>
+          <div className="agent-task-filters" role="tablist" aria-label="Task filters">
+            <button type="button" className="is-active" role="tab" aria-selected="true">All <b>0</b></button>
+            <button type="button" role="tab" aria-selected="false">Running <b>0</b></button>
+            <button type="button" role="tab" aria-selected="false">Queued <b>0</b></button>
+            <button type="button" role="tab" aria-selected="false">Done <b>0</b></button>
+          </div>
           {unpaired ? (
-            <p className="panel-empty">Link a device to queue tasks. <button type="button" className="text-link" onClick={onDocs}>Docs</button></p>
+            <div className="agent-empty-state">
+              <span className="agent-empty-icon">✦</span>
+              <strong>Nothing queued yet</strong>
+              <p>Link a device to delegate local work. <button type="button" className="text-link" onClick={onDocs}>Open Docs</button></p>
+            </div>
           ) : (
             <>
               {showNewTask && (
@@ -128,22 +139,25 @@ export function AgentWorkspace({
           </div>
         </div>
 
-        <aside className="glass-panel active-task-panel level-2" aria-label="Current task">
-          <h2>Current task</h2>
-          {unpaired ? (
-            <p className="panel-empty">No active task — link your device in Docs.</p>
-          ) : !online ? (
-            <>
-              <p className="panel-empty">No active task</p>
-              <p className="active-task-hint">Delegate something or accept a FLOW recommendation when the daemon is online.</p>
-              <p className="active-task-meta">{device?.name ?? 'Device'} · {presenceLabel(presence)}</p>
-            </>
-          ) : (
-            <>
-              <p className="panel-empty">No active task</p>
-              <p className="active-task-hint">Delegate from Session or send a prompt below.</p>
-            </>
-          )}
+        <aside className="glass-panel active-task-panel level-2" aria-label="Agent status and tools">
+          <section className="agent-status-block">
+            <header><h2>Agent status</h2><span className={`agent-status-label ${online ? 'is-online' : ''}`}><i />{online ? 'Ready' : 'Standby'}</span></header>
+            <dl className="agent-status-list">
+              <div><dt>Model</dt><dd>{modelStatus(health.model)}</dd></div>
+              <div><dt>Tools</dt><dd>{online ? '6 available' : 'Available on device'}</dd></div>
+              <div><dt>Workspace</dt><dd>{online ? device?.name ?? 'Linked machine' : 'Not linked'}</dd></div>
+              <div><dt>Permissions</dt><dd>Safe Execute</dd></div>
+            </dl>
+          </section>
+          <section className="agent-tools-block">
+            <header><h3>Available tools</h3><span>View all</span></header>
+            <div className="agent-tools-grid">
+              {TOOLS.map(([icon, label]) => (
+                <button type="button" key={label} disabled={!online} onClick={() => onAnnounce(`${label} runs locally when delegated.`)}><FlowIcon>{icon}</FlowIcon><span>{label}</span></button>
+              ))}
+            </div>
+          </section>
+          <section className="agent-approval-summary"><strong>Pending approval</strong><span>0</span><small>Changes wait for your review before execution.</small></section>
         </aside>
       </div>
 

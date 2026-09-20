@@ -510,6 +510,33 @@ body:has(.flow-workspace)::before { display: none; }
 .task-queue-panel, .active-task-panel { padding: 18px; }
 .task-queue-panel { background: linear-gradient(180deg, rgba(14, 14, 14, .48), rgba(8, 9, 10, .28)) !important; }
 .active-task-panel { background: linear-gradient(180deg, rgba(14, 14, 14, .42), rgba(8, 9, 10, .24)) !important; }
+.agent-task-filters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin: 14px 0 10px; }
+.agent-task-filters button { min-height: 30px; padding: 4px 5px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; background: rgba(8,10,12,.3); color: #aaa39b; font: inherit; font-size: 10px; cursor: pointer; }
+.agent-task-filters button.is-active { border-color: rgba(242,205,145,.7); color: #ffe7bd; background: rgba(169,119,55,.2); }
+.agent-task-filters b { margin-left: 3px; color: inherit; font-weight: 500; }
+.agent-empty-state { display: grid; justify-items: center; gap: 7px; margin: 52px 12px 0; text-align: center; }
+.agent-empty-icon { display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid rgba(242,205,145,.34); border-radius: 50%; color: var(--gold-bright); background: rgba(169,119,55,.15); font-size: 18px; }
+.agent-empty-state strong { font-size: 14px; font-weight: 500; }
+.agent-empty-state p { color: #aaa39b; font-size: 12px; line-height: 1.45; }
+.agent-status-block header, .agent-tools-block header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.agent-status-block h2 { margin: 0; font-size: 16px; }
+.agent-status-label { display: inline-flex; align-items: center; gap: 6px; color: #aaa39b; font-size: 11px; }
+.agent-status-label.is-online { color: var(--mint); }
+.agent-status-label i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.agent-status-list { display: grid; gap: 0; margin: 12px 0 0; }
+.agent-status-list div { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line-soft); font-size: 12px; }
+.agent-status-list dt { color: #aaa39b; }
+.agent-status-list dd { max-width: 150px; margin: 0; color: #eee8e1; text-align: right; }
+.agent-tools-block { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.agent-tools-block h3 { margin: 0; font-size: 14px; font-weight: 500; }
+.agent-tools-block header span { color: var(--gold-bright); font-size: 11px; }
+.agent-tools-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+.agent-tools-grid button { display: grid; justify-items: center; gap: 5px; min-height: 60px; padding: 7px 4px; border: 1px solid rgba(255,255,255,.1); border-radius: 9px; background: rgba(8,10,12,.35); color: #e8e2db; font: inherit; font-size: 10px; cursor: pointer; }
+.agent-tools-grid button:disabled { opacity: .6; cursor: not-allowed; }
+.agent-tools-grid .flow-icon { font-size: 17px; color: var(--gold-bright); }
+.agent-approval-summary { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--line-soft); font-size: 12px; }
+.agent-approval-summary span { display: grid; place-items: center; min-width: 20px; height: 20px; border: 1px solid rgba(242,205,145,.45); border-radius: 50%; color: var(--gold-bright); }
+.agent-approval-summary small { grid-column: 1 / -1; color: #aaa39b; font-size: 11px; line-height: 1.35; }
 
 @media (max-width: 980px) {
   .session-workspace-v2, .agent-workspace-v2 { min-height: 0; }
