@@ -43,13 +43,27 @@ def test_model_marker_alone_or_tampered_payload_is_not_ready(tmp_path):
     assert ModelManager(tmp_path).status("vision")[0]["status"] == "corrupt"
 
 
-def test_model_manager_refuses_models_over_the_local_memory_budget(tmp_path):
-    from services.flow.models_registry import MAX_MODEL_MEMORY_MB, ModelManager
+def test_model_manager_allows_downloads_but_blocks_oversized_runtime(tmp_path, monkeypatch):
+    import sys
+    from pathlib import Path
+    from types import SimpleNamespace
 
-    assert MAX_MODEL_MEMORY_MB == 500
+    from services.flow.models_registry import ModelManager
+
+    def snapshot_download(**kwargs):
+        Path(kwargs["local_dir"], "weights.bin").write_bytes(b"model weights")
+
+    monkeypatch.setitem(sys.modules, "huggingface_hub", SimpleNamespace(snapshot_download=snapshot_download))
+
+    manager = ModelManager(tmp_path)
+    installed = manager.install("vision")
+
+    assert installed[0]["status"] == "ready"
+    assert installed[0]["within_runtime_memory_budget"] is False
+
     try:
-        ModelManager(tmp_path).install("vision")
+        manager.assert_runtime_memory_budget(manager._spec("vision"))
     except RuntimeError as exc:
-        assert "500 MB" in str(exc)
+        assert "runtime CPU memory limit is 500 MB" in str(exc)
     else:
-        raise AssertionError("oversized model install was not refused")
+        raise AssertionError("oversized model was allowed to load")

@@ -23,7 +23,7 @@ export const TROUBLESHOOTING = [
   { issue: 'Device shows offline but still linked', fix: 'Start the local daemon: flow daemon start' },
   { issue: 'flow login times out', fix: 'Open the browser URL within 5 minutes and approve the device request.' },
   { issue: 'Session commands fail', fix: 'Run flow status and ensure one active session exists.' },
-  { issue: 'Model shows unloaded', fix: 'Normal — FLOW loads models on demand (≤500 MB budget).' },
+  { issue: 'Model shows unloaded', fix: 'Normal — FLOW loads models on demand; the daemon keeps each model’s CPU working set within 500 MB.' },
   { issue: 'Permission errors on macOS', fix: 'Run flow permissions and grant Screen Recording + Accessibility.' },
   { issue: 'Account URL mismatch', fix: 'export FLOW_ACCOUNT_URL=<this site origin> then flow login again.' },
 ] as const;

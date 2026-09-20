@@ -33,7 +33,7 @@ class KokoroVoiceEngine:
         if self._pipeline is not None:
             return
         manager = ModelManager(self.model_root.parent)
-        manager.assert_memory_budget(manager._spec("voice"))
+        manager.assert_runtime_memory_budget(manager._spec("voice"))
         if not self.model_root.is_dir():
             raise RuntimeError("Kokoro is not installed; run: flow models install voice")
         try:

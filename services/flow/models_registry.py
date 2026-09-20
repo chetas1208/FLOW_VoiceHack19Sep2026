@@ -1,4 +1,4 @@
-"""Optional local model artifacts and FLOW's strict memory policy."""
+"""Optional local model artifacts and FLOW's bounded runtime policy."""
 
 from __future__ import annotations
 
@@ -15,10 +15,13 @@ from typing import Any
 from .config import config_dir
 
 
-# The local runtime must remain usable on a small laptop.  This is a hard
-# product limit, not a recommendation: FLOW never downloads or loads a model
-# whose declared working set exceeds it.
-MAX_MODEL_MEMORY_MB = 500
+# The local runtime must remain usable on a small laptop. This is a hard
+# runtime working-set limit, not a download limit. Large model artifacts may
+# be downloaded for later use, inspection, or a machine with more capacity;
+# the bounded runtime refuses to load them.
+MAX_RUNTIME_MODEL_MEMORY_MB = 500
+# Keep the old constant as a compatibility alias for integrations that import it.
+MAX_MODEL_MEMORY_MB = MAX_RUNTIME_MODEL_MEMORY_MB
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,13 +81,16 @@ class ModelManager:
         return MODEL_REGISTRY[key]
 
     @staticmethod
-    def assert_memory_budget(spec: ModelSpec) -> None:
-        if spec.memory_estimate_mb > MAX_MODEL_MEMORY_MB:
+    def assert_runtime_memory_budget(spec: ModelSpec) -> None:
+        if spec.memory_estimate_mb > MAX_RUNTIME_MODEL_MEMORY_MB:
             raise RuntimeError(
                 f"{spec.name} needs about {spec.memory_estimate_mb} MB; "
-                f"FLOW's hard local model limit is {MAX_MODEL_MEMORY_MB} MB. "
-                "Use the built-in metadata analyzer instead."
+                f"FLOW's hard runtime CPU memory limit is {MAX_RUNTIME_MODEL_MEMORY_MB} MB. "
+                "Use the built-in metadata analyzer or a larger-runtime host instead."
             )
+
+    # Backward-compatible name for callers using the original API.
+    assert_memory_budget = assert_runtime_memory_budget
 
     def status(self, key: str | None = None, variant: str | None = None) -> list[dict[str, Any]]:
         key = MODEL_ALIASES.get(key, key) if key else key
@@ -114,7 +120,8 @@ class ModelManager:
                 except (OSError, json.JSONDecodeError):
                     state = "corrupt"
             result.append({**asdict(spec), "path": str(path), "status": state,
-                           "within_memory_budget": spec.memory_estimate_mb <= MAX_MODEL_MEMORY_MB,
+                           "within_runtime_memory_budget":
+                               spec.memory_estimate_mb <= MAX_RUNTIME_MODEL_MEMORY_MB,
                            "manifest": manifest})
         return result
 
@@ -132,7 +139,6 @@ class ModelManager:
         installed = []
         for item in keys:
             spec = self._spec(item, variant if item == "vision" else None)
-            self.assert_memory_budget(spec)
             target = self.path(item)
             if self.status(item, variant if item == "vision" else None)[0]["status"] == "ready":
                 installed.append(self.status(item, variant if item == "vision" else None)[0]); continue

@@ -98,7 +98,7 @@ class FlowDaemon:
         from .runtime import SessionRuntime
         observer = create_observer()
         # Session control stays synchronous and local even when optional model
-        # weights are unavailable or outside FLOW's 500 MB memory budget.
+        # weights are unavailable or outside FLOW's 500 MB runtime memory budget.
         self.runtime = SessionRuntime(self.manager, session_id, observer, MetadataAnalyzer())
         self.runtime_task = asyncio.create_task(self.runtime.run(), name=f"flow-runtime-{session_id}")
 

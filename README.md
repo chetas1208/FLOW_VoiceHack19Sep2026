@@ -156,9 +156,10 @@ product:
 - The web account layer stores identity, sessions, and device/control metadata
   in Postgres; screenshots, prompts, transcripts, code, and session evidence
   remain on the linked machine.
-- The local model policy is hard-capped at 500 MB per model. Optional larger
-  model adapters are refused by the installer/runtime; the daemon uses its
-  deterministic metadata analyzer so session control remains available.
+- The local runtime enforces a 500 MB CPU working-set budget per loaded model.
+  Model downloads are not capped; models whose declared runtime working set is
+  larger are stored and available for inspection, but are not loaded by the
+  bounded daemon, which falls back to the deterministic metadata analyzer.
 - Session score, goal alignment, focus continuity and context stability are
   illustrative, unvalidated heuristics — not statements about productivity
   or attention.
