@@ -458,6 +458,7 @@ body:has(.flow-workspace)::before { display: none; }
   min-height: min(62vh, 610px);
   gap: clamp(10px, 1.2vw, 18px);
 }
+.session-workspace-v2 > *, .session-main-grid > * { grid-area: auto !important; }
 .session-goal-panel {
   display: flex;
   flex-direction: column;
@@ -483,6 +484,7 @@ body:has(.flow-workspace)::before { display: none; }
 .goal-quote span { color: #d5c2a8; }
 .session-stage-spine { min-height: min(62vh, 610px); gap: 10px; }
 .session-stage-spine > .setup-strip { flex: none; }
+.session-stage-spine > .setup-strip { grid-template-columns: 1fr; }
 .session-stage-spine .stage-rail-inline { flex: none; margin: 0; padding: 8px 10px; }
 .session-stage-spine .cockpit-float-layer { min-height: 0; flex: 1; }
 .session-stage-spine .cockpit-float-layer::after { content: 'GOOD THINGS TAKE FOCUS'; position: absolute; right: 18%; bottom: 4%; left: 18%; color: rgba(229, 173, 102, .78); font-size: 10px; letter-spacing: .22em; text-align: center; }
