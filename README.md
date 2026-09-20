@@ -46,7 +46,8 @@ being guessed at — see [Honest scope and known limitations](#honest-scope-and-
 
 ## Quick start
 
-Requires Node.js 20+.
+Requires Node.js 20+ for the legacy local server, and Python 3.11+ for the
+local FLOW CLI/daemon.
 
 ```bash
 npm install
@@ -55,7 +56,11 @@ npm run dev
 # UI    → http://localhost:5173  (proxies /api to the server above)
 ```
 
-Open `http://localhost:5173`, type a goal under **Sessions → Start session**,
+For the live account-connected workspace, open the deployed web app at
+`https://flow-session-intelligence-psi.vercel.app`, create an account, then
+open **Docs** for the one-command CLI install and `flow login` pairing flow.
+For local development, open `http://localhost:5173`, type a goal under
+**Sessions → Start session**,
 and either:
 
 - check **Observe my active app** (macOS only, needs Accessibility
@@ -124,12 +129,12 @@ native/         macOS Swift capture prototype for a future real screen/window ob
 docs/flow/      Backlog and scope notes: what's implemented vs. still design-only
 ```
 
-## FLOW web recreation
+## FLOW web workspace
 
-`web/` is a separate, deterministic recreation of the original FLOW UI/UX
-reference design — a cinematic marketing-style workspace, not the live
-product above. `FlowWorkspacePage` owns tab state and device presence, `Diorama`
-renders the stage-aware workstation, and theme tokens live in
+`web/` is the authenticated cinematic FLOW workspace. It owns account-aware
+Session, Agent, and Docs tabs, CLI pairing state, device heartbeats, and the
+local-first privacy surface. `FlowWorkspacePage` owns tab state and device
+presence, `CockpitBackdrop` renders the workstation scene, and theme tokens live in
 `web/src/styles/tokens.css`.
 
 ```bash
@@ -148,7 +153,12 @@ product:
   model, no screen capture, no cloud inference is wired up yet (the analyzer
   is a pluggable boundary for one). `native/` holds an early Swift capture
   prototype for a real macOS observer; it hasn't been verified on hardware.
-- No user accounts, multi-device sync, or production authentication.
+- The web account layer stores identity, sessions, and device/control metadata
+  in Postgres; screenshots, prompts, transcripts, code, and session evidence
+  remain on the linked machine.
+- The local model policy is hard-capped at 500 MB per model. Optional larger
+  model adapters are refused by the installer/runtime; the daemon uses its
+  deterministic metadata analyzer so session control remains available.
 - Session score, goal alignment, focus continuity and context stability are
   illustrative, unvalidated heuristics — not statements about productivity
   or attention.
@@ -308,4 +318,3 @@ No verified live Docker sandbox, compiled HACP adapter, full remote A2A
 interoperability, Appium device pilot, unrestricted native Chromium networking,
 real external customer pilot, production multi-tenancy or semantic-judge calibration. A four-case fixture benchmark is only a smoke test.
 Do not claim all 14 original milestones are production-complete; see the audit.
-

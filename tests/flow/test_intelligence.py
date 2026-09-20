@@ -41,3 +41,15 @@ def test_model_marker_alone_or_tampered_payload_is_not_ready(tmp_path):
     (root / "flow-model.json").write_text(json.dumps({"source": MODEL_REGISTRY["vision"].source,
                                                         "sha256": "wrong"}))
     assert ModelManager(tmp_path).status("vision")[0]["status"] == "corrupt"
+
+
+def test_model_manager_refuses_models_over_the_local_memory_budget(tmp_path):
+    from services.flow.models_registry import MAX_MODEL_MEMORY_MB, ModelManager
+
+    assert MAX_MODEL_MEMORY_MB == 500
+    try:
+        ModelManager(tmp_path).install("vision")
+    except RuntimeError as exc:
+        assert "500 MB" in str(exc)
+    else:
+        raise AssertionError("oversized model install was not refused")

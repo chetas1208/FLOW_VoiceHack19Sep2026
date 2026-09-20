@@ -93,12 +93,13 @@ class FlowDaemon:
         """Start real observation only when the host has the required capabilities."""
         if platform.system() != "Darwin":
             return
-        from .intelligence import QwenVLIntelligenceEngine
+        from .activity import MetadataAnalyzer
         from .observer import create_observer
         from .runtime import SessionRuntime
         observer = create_observer()
-        intelligence = QwenVLIntelligenceEngine()
-        self.runtime = SessionRuntime(self.manager, session_id, observer, intelligence)
+        # Session control stays synchronous and local even when optional model
+        # weights are unavailable or outside FLOW's 500 MB memory budget.
+        self.runtime = SessionRuntime(self.manager, session_id, observer, MetadataAnalyzer())
         self.runtime_task = asyncio.create_task(self.runtime.run(), name=f"flow-runtime-{session_id}")
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:

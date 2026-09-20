@@ -1,4 +1,4 @@
-"""The only two model artifacts FLOW installs for the local coach."""
+"""Optional local model artifacts and FLOW's strict memory policy."""
 
 from __future__ import annotations
 
@@ -13,6 +13,12 @@ from pathlib import Path
 from typing import Any
 
 from .config import config_dir
+
+
+# The local runtime must remain usable on a small laptop.  This is a hard
+# product limit, not a recommendation: FLOW never downloads or loads a model
+# whose declared working set exceeds it.
+MAX_MODEL_MEMORY_MB = 500
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +77,15 @@ class ModelManager:
                 raise ValueError(f"unknown intelligence variant: {variant}") from exc
         return MODEL_REGISTRY[key]
 
+    @staticmethod
+    def assert_memory_budget(spec: ModelSpec) -> None:
+        if spec.memory_estimate_mb > MAX_MODEL_MEMORY_MB:
+            raise RuntimeError(
+                f"{spec.name} needs about {spec.memory_estimate_mb} MB; "
+                f"FLOW's hard local model limit is {MAX_MODEL_MEMORY_MB} MB. "
+                "Use the built-in metadata analyzer instead."
+            )
+
     def status(self, key: str | None = None, variant: str | None = None) -> list[dict[str, Any]]:
         key = MODEL_ALIASES.get(key, key) if key else key
         specs = [self._spec(key, variant)] if key else list(MODEL_REGISTRY.values())
@@ -99,6 +114,7 @@ class ModelManager:
                 except (OSError, json.JSONDecodeError):
                     state = "corrupt"
             result.append({**asdict(spec), "path": str(path), "status": state,
+                           "within_memory_budget": spec.memory_estimate_mb <= MAX_MODEL_MEMORY_MB,
                            "manifest": manifest})
         return result
 
@@ -116,6 +132,7 @@ class ModelManager:
         installed = []
         for item in keys:
             spec = self._spec(item, variant if item == "vision" else None)
+            self.assert_memory_budget(spec)
             target = self.path(item)
             if self.status(item, variant if item == "vision" else None)[0]["status"] == "ready":
                 installed.append(self.status(item, variant if item == "vision" else None)[0]); continue

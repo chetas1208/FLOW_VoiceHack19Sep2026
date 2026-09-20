@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -45,6 +46,28 @@ class MockAnalyzer:
 
     async def analyze(self, goal, frame, context, history) -> AnalysisResult:
         return self.result
+
+
+class MetadataAnalyzer:
+    """Small deterministic fallback that never loads a model or screen pixels."""
+
+    async def analyze(self, goal: str, frame: CapturedFrame, context: dict[str, Any],
+                      history: list[dict[str, Any]]) -> AnalysisResult:
+        activity = " — ".join(part for part in (frame.application, frame.window_title) if part)
+        if not activity:
+            return AnalysisResult("No active-window metadata observed", ActivityCategory.UNKNOWN, None, None, .1)
+        goal_terms = {term for term in re.findall(r"[a-z0-9]{3,}", goal.lower())}
+        activity_terms = set(re.findall(r"[a-z0-9]{3,}", activity.lower()))
+        overlap = goal_terms & activity_terms
+        if overlap:
+            alignment = min(1.0, .65 + .1 * len(overlap))
+            return AnalysisResult(activity, ActivityCategory.CORE_TASK, alignment, .6, .75,
+                                  "Active-window metadata overlaps the declared goal.", tuple(sorted(overlap)))
+        if frame.application and frame.application.lower() in {"terminal", "iterm", "code", "visual studio code", "xcode"}:
+            return AnalysisResult(activity, ActivityCategory.SUPPORTING_TASK, .55, .35, .45,
+                                  "Development activity is supporting evidence, but the goal match is uncertain.")
+        return AnalysisResult(activity, ActivityCategory.UNKNOWN, None, None, .25,
+                              "Insufficient metadata to classify this activity safely.")
 
 
 ANALYZER_SYSTEM_PROMPT = """You analyze a user's computer activity during a voluntary work session.

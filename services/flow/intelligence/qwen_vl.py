@@ -49,6 +49,8 @@ class QwenVLIntelligenceEngine:
     def load(self) -> None:
         if self.loaded:
             return
+        manager = ModelManager(self.model_root.parent)
+        manager.assert_memory_budget(manager._spec("vision"))
         if not self.model_root.is_dir():
             raise RuntimeError("Qwen3-VL is not installed; run: flow models install intelligence")
         try:
