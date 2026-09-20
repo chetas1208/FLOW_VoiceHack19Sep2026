@@ -7,16 +7,10 @@ import {
   revokeCurrentSession,
   send,
   signIn,
-} from '../_lib/flow-auth.js';
+} from './flow-auth.js';
 
-function action(req) {
-  const path = req.query.path;
-  if (Array.isArray(path)) return path[0] ?? '';
-  return typeof path === 'string' ? path : '';
-}
-
-export default async function handler(req, res) {
-  switch (action(req)) {
+export async function handleAuthApi(req, res, parts) {
+  switch (parts[0]) {
     case 'login':
       if (req.method !== 'POST') return send(res, 405, { error: 'method_not_allowed', message: 'Use POST.' });
       try {

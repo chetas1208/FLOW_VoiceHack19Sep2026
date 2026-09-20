@@ -7,18 +7,9 @@ import {
   revokeDevice,
   send,
   withControlPlane,
-} from '../_lib/flow-control-plane.js';
+} from './flow-control-plane.js';
 
-function segments(req) {
-  const path = req.query.path;
-  if (Array.isArray(path)) return path;
-  if (typeof path === 'string' && path) return [path];
-  return [];
-}
-
-export default async function handler(req, res) {
-  const parts = segments(req);
-
+export async function handleAccountApi(req, res, parts) {
   if (parts[0] === 'devices' && parts.length === 1) {
     if (req.method !== 'GET') return send(res, 405, { error: 'method_not_allowed', message: 'Use GET to list FLOW devices.' });
     return withControlPlane(res, async () => send(res, 200, await listDevices(req)));
