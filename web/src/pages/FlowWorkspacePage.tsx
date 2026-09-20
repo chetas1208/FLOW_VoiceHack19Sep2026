@@ -52,7 +52,7 @@ export default function FlowWorkspacePage({ account }: { account?: AccountUser }
   }, [tab]);
 
   const health = device?.presence.health ?? {};
-  const immersive = tab === 'session' || tab === 'agent' || tab === 'showcase';
+  const immersive = tab === 'session' || tab === 'agent' || tab === 'showcase' || tab === 'docs';
   const footerDevice = pairing === 'paired'
     ? `${device?.name ?? 'Device'} ● ${presence === 'online' ? 'Connected' : presenceLabel(presence)}`
     : 'Link a device';
