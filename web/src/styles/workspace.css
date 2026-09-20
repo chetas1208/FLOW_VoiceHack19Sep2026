@@ -447,6 +447,8 @@ body:has(.flow-workspace)::before { display: none; }
 /* Real workspace composition: the live tabs should carry the same visual
    confidence as the product preview without inventing session evidence. */
 .session-workspace-v2 {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: none;
   grid-template-rows: minmax(0, 1fr) auto;
   min-height: min(78vh, 760px);
   gap: clamp(10px, 1.2vh, 16px);
@@ -492,6 +494,8 @@ body:has(.flow-workspace)::before { display: none; }
 .is-immersive-shell .session-goal-panel { background: rgba(8, 10, 12, .28) !important; }
 
 .agent-workspace-v2 {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: none;
   grid-template-rows: auto minmax(420px, 1fr) auto auto;
   min-height: min(78vh, 760px);
   gap: clamp(10px, 1.2vh, 16px);
