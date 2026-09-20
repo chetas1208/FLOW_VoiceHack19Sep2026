@@ -11,6 +11,8 @@ import { CliAuthPage } from './pages/CliAuthPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { AccountPage } from './pages/AccountPage';
 import { AuthenticatedFlowPage } from './pages/AuthenticatedFlowPage';
+import { CliConnectPage } from './pages/CliConnectPage';
+import { DocsPage } from './pages/DocsPage';
 
 const CockpitPage = lazy(() => import('./pages/CockpitPage'));
 const ReportPage = lazy(() => import('./pages/ReportPage'));
@@ -32,6 +34,8 @@ export function App() {
           <Route path="/app" element={<AuthenticatedFlowPage />} />
           <Route path="/auth" element={<AccountPage />} />
           <Route path="/login" element={<Navigate to="/auth" replace />} />
+          <Route path="/docs" element={<DocsPage />} />
+          <Route path="/cli/authorize" element={<CliConnectPage />} />
           <Route path="/auth/callback" element={<OidcCallbackPage />} />
           <Route element={<RequireAuth />}>
             <Route path="/sessions" element={<SessionsPage />} />

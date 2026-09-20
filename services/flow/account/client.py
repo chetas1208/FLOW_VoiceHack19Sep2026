@@ -27,26 +27,24 @@ class AccountClient:
 
     def start_login(self) -> tuple[CLIAuthRequest, str, str]:
         request = CLIAuthRequest.create()
-        response = self._post("/v1/cli/auth/requests", {
+        response = self._post("/api/cli/auth/requests", {
             "state": request.state, "code_challenge": request.challenge, "device": metadata(config_dir()),
         }, auth=False)
         request_id = self._text(response, "request_id")
-        self.user_code = response.get("user_code") if isinstance(response.get("user_code"), str) else None
         return request, request_id, authorization_url(self.base_url, request_id, request.state)
 
-    def exchange(self, request_id: str, code: str, request: CLIAuthRequest) -> dict[str, Any]:
-        result = self._post("/v1/cli/auth/token", {"request_id": request_id, "code": code,
-                                                     "code_verifier": request.verifier}, auth=False)
+    def exchange(self, request_id: str, request: CLIAuthRequest) -> dict[str, Any]:
+        result = self._post("/api/cli/auth/token", {"request_id": request_id, "code_verifier": request.verifier}, auth=False)
         self._save_tokens(result)
         return result
 
     def wait_for_approval(self, request_id: str, request: CLIAuthRequest, *, timeout: float = 300) -> dict[str, Any]:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            body = self._get_public(f"/v1/cli/auth/requests/{request_id}")
+            body = self._get_public(f"/api/cli/auth/requests/{request_id}")
             status = body.get("status")
-            if status == "approved" and isinstance(body.get("code"), str):
-                return self.exchange(request_id, body["code"], request)
+            if status == "approved":
+                return self.exchange(request_id, request)
             if status in {"denied", "expired", "consumed"}:
                 raise AccountClientError(f"authorization request {status}")
             time.sleep(1)
@@ -56,7 +54,7 @@ class AccountClient:
         token = self.secrets.get("account_refresh_token")
         if not token:
             raise AccountClientError("FLOW is not signed in")
-        result = self._post("/v1/auth/refresh", {"refresh_token": token}, auth=False)
+        result = self._post("/api/cli/auth/refresh", {"refresh_token": token}, auth=False)
         self._save_tokens(result)
         return result
 
@@ -64,16 +62,19 @@ class AccountClient:
         token = self.secrets.get("account_refresh_token")
         if token:
             try:
-                self._post("/v1/auth/logout", {"refresh_token": token}, auth=False)
+                self._post("/api/cli/auth/logout", {"refresh_token": token}, auth=False)
             finally:
                 self.secrets.delete("account_access_token")
                 self.secrets.delete("account_refresh_token")
 
     def whoami(self) -> dict[str, Any]:
-        return self._get("/v1/me")
+        return self._get("/api/cli/me")
 
     def devices(self) -> dict[str, Any]:
-        return self._get("/v1/devices")
+        return self._get("/api/cli/devices")
+
+    def heartbeat(self, health: dict[str, str], active_sessions: list[str] | None = None) -> dict[str, Any]:
+        return self._post("/api/cli/heartbeat", {"health": health, "active_sessions": active_sessions or []})
 
     def _get(self, path: str) -> dict[str, Any]:
         token = self.secrets.get("account_access_token")

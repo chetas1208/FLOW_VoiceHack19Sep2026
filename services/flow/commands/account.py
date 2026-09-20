@@ -31,7 +31,8 @@ def run(args) -> int:
             code = f"\nVerification code: {client.user_code}" if client.user_code else ""
             print(f"Open this URL to authorize FLOW:\n{url}{code}\nRequest state: {request.state}")
             client.wait_for_approval(request_id, request, timeout=args.timeout)
-            print("FLOW device authorized")
+            client.heartbeat({"daemon": "not_running", "agent": "idle", "model": "not_loaded"})
+            print("FLOW device authorized and linked to your account")
             return 0
         if args.command == "logout":
             client.logout()
