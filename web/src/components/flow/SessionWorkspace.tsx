@@ -1,48 +1,19 @@
-import { useCallback, useState, type CSSProperties } from 'react';
+import { useCallback, useState } from 'react';
 import type { FlowDevice } from '../../lib/account';
-import { ago, daemonStatus, pairingState, presenceLabel, type PresenceState } from '../../lib/flowDeviceModel';
+import { pairingState, type PresenceState } from '../../lib/flowDeviceModel';
 import { WORKSPACE_STAGES } from './CockpitScenes';
+import { FlowDrawer } from './FlowDrawer';
 import { FlowIcon } from './FlowIcon';
 import { InteractiveTimeline } from './InteractiveTimeline';
+import { SessionActivityDrawerContent } from './SessionActivityDrawer';
 
-const METRIC_DEFS = [
-  { label: 'Session Efficiency', color: 'mint' as const, blurb: 'How steadily you moved toward the goal without thrash.' },
-  { label: 'Goal Alignment', color: 'mint' as const, blurb: 'Share of observed activity linked to your stated goal.' },
-  { label: 'Focus', color: 'blue' as const, blurb: 'Longest uninterrupted blocks of aligned work.' },
-  { label: 'Progress', color: 'gold' as const, blurb: 'Evidence-backed steps completed toward the goal.' },
-];
-
-const ACTIVITY_STUBS = [
-  { icon: '⌘', label: 'Waiting for observations', detail: 'Start flow start on your device to populate this feed.' },
-  { icon: '⌁', label: 'Daemon channel', detail: 'Live rows stream from your linked machine only.' },
-  { icon: '▤', label: 'Privacy', detail: 'No screen content is uploaded — metadata stays local.' },
-];
-
-function MetricRing({
-  label,
-  value,
-  status,
-  color,
-  active,
-  blurb,
-  onToggle,
-}: {
-  label: string;
-  value: number | '—';
-  status: string;
-  color: 'mint' | 'blue' | 'gold';
-  active: boolean;
-  blurb: string;
-  onToggle: () => void;
-}) {
+function MetricBar({ label, value }: { label: string; value: number | '—' }) {
   const n = value === '—' ? 0 : value;
   return (
-    <div className={`metric${active ? ' is-active' : ''}`}>
-      <button type="button" className="metric-hit" onClick={onToggle} aria-pressed={active}>
-        <span className={`metric-ring ${color}`} style={{ '--progress': `${n * 3.6}deg` } as CSSProperties}><b>{value}</b></span>
-        <span className="metric-copy"><strong>{label}</strong><em>{status}</em></span>
-      </button>
-      {active && <p className="metric-blurb">{blurb}</p>}
+    <div className="metric-bar">
+      <span className="metric-bar-label">{label}</span>
+      <span className="metric-bar-track" aria-hidden="true"><i style={{ width: `${n}%` }} /></span>
+      <b>{value === '—' ? '—' : value}</b>
     </div>
   );
 }
@@ -66,14 +37,13 @@ export function SessionWorkspace({
   stopped?: boolean;
   paused?: boolean;
 }) {
-  const health = device?.presence.health ?? {};
   const unpaired = pairing === 'unpaired' || pairing === 'revoked';
   const online = pairing === 'paired' && presence === 'online';
+  const sessionActive = online && !stopped && !paused;
   const [stageIndex, setStageIndex] = useState(0);
-  const [metricFocus, setMetricFocus] = useState<number | null>(null);
   const [goalDraft, setGoalDraft] = useState('');
   const [editingGoal, setEditingGoal] = useState(false);
-  const [activityOpen, setActivityOpen] = useState<number | null>(0);
+  const [activityOpen, setActivityOpen] = useState(false);
 
   const stage = WORKSPACE_STAGES[stageIndex]!;
 
@@ -82,150 +52,154 @@ export function SessionWorkspace({
     onAnnounce(`${WORKSPACE_STAGES[index]!.label} stage selected.`);
   }, [onAnnounce]);
 
-  let title = stopped ? 'Session stopped' : paused ? 'Session paused' : stage.label;
-  let detail = stopped ? 'Use controls below to resume or pick a stage.' : paused ? 'FLOW is holding observations until you resume.' : stage.detail;
-  if (unpaired) {
-    title = 'Link your machine';
-    detail = 'Pair with flow login — this cockpit connects to your device when the daemon is online.';
-  } else if (!online && !stopped) {
-    title = presence === 'connecting' ? 'Connecting…' : `${device!.name}`;
-    detail = `${presenceLabel(presence)} · still linked · last seen ${ago(device!.last_seen_at ?? device!.presence.last_heartbeat_at)}`;
-  }
+  const goalText = goalDraft.trim()
+    ? goalDraft
+    : unpaired
+      ? 'Link your device to start a session'
+      : online
+        ? 'Set a goal with flow start on your device'
+        : 'Start the daemon, then flow start "your goal"';
 
-  const sceneLabel = unpaired ? 'Your workspace' : (device?.name ?? 'Device');
-  const sceneSub = unpaired ? 'Link to begin' : online ? 'Ready for flow start' : daemonStatus(health.daemon, presence);
-  const sceneActivity = stopped ? 'Paused' : online ? stage.activity : stage.activity;
+  const stageLine = unpaired
+    ? 'Setup'
+    : stopped
+      ? 'Stopped'
+      : paused
+        ? 'Paused'
+        : `Stage ${stageIndex + 1} of ${WORKSPACE_STAGES.length} · ${stage.label}`;
 
-  const copyStart = () => {
-    void navigator.clipboard.writeText('flow start "your goal"').then(
-      () => onAnnounce('Copied: flow start "your goal"'),
-      () => onAnnounce('Copy flow start from Docs'),
-    );
-  };
+  const sessionMeta = sessionActive ? 'Session active on device' : online ? 'Linked · no active session' : unpaired ? 'Not linked' : 'Device linked · offline';
+
+  const currentActivity = unpaired
+    ? 'Waiting to link'
+    : !online
+      ? 'Daemon offline'
+      : stopped
+        ? 'Session stopped'
+        : paused
+          ? 'Session paused'
+          : sessionActive
+            ? stage.activity
+            : 'No active session';
+
+  const insightTitle = online && !unpaired ? 'FLOW Insight' : 'FLOW Insight';
+  const insightBadge = sessionActive ? 'Listening' : 'Standby';
+  const insightBody = unpaired
+    ? 'Pair your device in Docs to receive recommendations during local sessions.'
+    : !online
+      ? 'Your device stays linked. Run flow daemon start locally — insights appear when a session runs.'
+      : sessionActive
+        ? 'When FLOW observes aligned work, the next recommended action appears here.'
+        : 'Start flow start on your device. This panel highlights one next action at a time.';
 
   return (
-    <section className="session-workspace cockpit-overlay" aria-label="Session workspace">
-      <div className="cockpit-float-layer" aria-hidden="true">
-        <button type="button" className="scene-card editor-card scene-card-btn cockpit-float" onClick={() => onAnnounce(unpaired ? 'Link a device to mirror your workspace.' : `${sceneLabel}: ${sceneSub}`)}>
-          <FlowIcon>⌘</FlowIcon><span>{sceneLabel}<small>{sceneSub}</small></span>
-        </button>
-        <button type="button" className="scene-card test-card scene-card-btn cockpit-float" onClick={() => onAnnounce(online ? 'Daemon connected on your device.' : 'Run flow daemon start on your linked machine.')}>
-          <FlowIcon>⌁</FlowIcon><span>Local FLOW<small>{sceneActivity}</small></span>
-        </button>
-      </div>
-      <aside className="glass-panel goal-panel">
-        {unpaired && (
-          <p className="connect-banner">Run <code>flow login</code> on your computer, then approve this browser.</p>
-        )}
-        {!unpaired && !online && (
-          <p className="connect-banner">On your machine: <code>flow daemon start</code></p>
-        )}
-        <div className="eyebrow-row">
-          <span>Current Goal</span>
-          <button type="button" disabled={!online} onClick={() => { setEditingGoal((v) => !v); onAnnounce(editingGoal ? 'Goal editor closed.' : 'Edit your goal — saved locally until flow start syncs.'); }}>
+    <>
+      <section className="session-workspace session-workspace-v2 cockpit-overlay" aria-label="Session workspace">
+        <header className="session-goal-bar glass-panel level-2">
+          <div className="session-goal-main">
+            <span className="session-goal-eyebrow">Goal</span>
+            {editingGoal ? (
+              <label className="goal-field goal-field-inline">
+                <span className="sr-only">Session goal</span>
+                <input
+                  value={goalDraft}
+                  onChange={(e) => setGoalDraft(e.target.value)}
+                  placeholder="What are you working on?"
+                  onKeyDown={(e) => { if (e.key === 'Enter') { setEditingGoal(false); onAnnounce('Goal draft saved locally.'); } }}
+                />
+              </label>
+            ) : (
+              <h2>{goalText}</h2>
+            )}
+            <p className="session-goal-meta">{stageLine} · {sessionMeta}</p>
+          </div>
+          <button
+            type="button"
+            className="goal-edit-btn"
+            disabled={!online}
+            onClick={() => { setEditingGoal((v) => !v); onAnnounce(editingGoal ? 'Goal editor closed.' : 'Edit goal locally until flow start syncs.'); }}
+          >
             <FlowIcon>✎</FlowIcon> Edit
           </button>
-        </div>
-        {editingGoal ? (
-          <label className="goal-field">
-            <span className="sr-only">Session goal</span>
-            <input
-              value={goalDraft}
-              onChange={(e) => setGoalDraft(e.target.value)}
-              placeholder="What are you working on?"
-              onKeyDown={(e) => { if (e.key === 'Enter') { setEditingGoal(false); onAnnounce('Goal draft saved locally.'); } }}
-            />
-          </label>
-        ) : (
-          <h2>{goalDraft.trim() ? goalDraft : online ? <>Waiting for your<br />next session goal</> : <>Set a goal with<br /><code>flow start</code></>}</h2>
-        )}
-        <p className="session-started"><i aria-hidden="true" />{online ? (paused ? 'Paused' : stopped ? 'Stopped' : 'No active session') : unpaired ? 'Not linked' : 'Device linked'}</p>
-        <div className="metric-stack">
-          {METRIC_DEFS.map((m, i) => (
-            <MetricRing
-              key={m.label}
-              label={m.label}
-              value="—"
-              status={online ? 'Live when session runs' : i === 0 ? 'Tap to learn more' : '—'}
-              color={m.color}
-              blurb={m.blurb}
-              active={metricFocus === i}
-              onToggle={() => { setMetricFocus(metricFocus === i ? null : i); onAnnounce(`${m.label}: ${m.blurb}`); }}
-            />
-          ))}
-        </div>
-        <div className="goal-actions">
-          <button type="button" className="secondary-action" onClick={copyStart}>Copy flow start</button>
-          {onGoAgent && online && (
-            <button type="button" className="secondary-action" onClick={() => { onGoAgent(); onAnnounce('Opened Agent tab.'); }}>Ask FLOW</button>
-          )}
-        </div>
-        <blockquote>“Consistent steps<br />create extraordinary results.”<small>— FLOW</small></blockquote>
-      </aside>
+        </header>
 
-      <section className="glass-panel session-head-panel" aria-label="Session focus">
-        <div className="stage-title">
-          <small>{unpaired ? 'Setup' : `Stage ${stageIndex + 1} of ${WORKSPACE_STAGES.length}`}</small>
-          <h1>{title}</h1>
-          <p>{detail}</p>
-        </div>
-        {!unpaired && (
-          <ol className="stage-rail stage-rail-compact" aria-label="Session stages">
-            {WORKSPACE_STAGES.map((item, index) => (
-              <li key={item.label} className={index === stageIndex ? 'is-current' : index < stageIndex ? 'is-complete' : ''}>
-                <button type="button" onClick={() => selectStage(index)} aria-current={index === stageIndex ? 'step' : undefined} aria-label={`${item.label} stage`}>
-                  <span>{index < stageIndex ? '✓' : item.symbol}</span>
-                  <small>{item.label}</small>
-                </button>
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
+        <div className="session-main-grid">
+          <aside className="glass-panel live-state-panel level-2" aria-label="Live state">
+            <h3>Live state</h3>
+            <div className="live-activity-line">
+              <span className="live-activity-label">Current activity</span>
+              <strong>{currentActivity}</strong>
+            </div>
+            <MetricBar label="Goal alignment" value="—" />
+            <MetricBar label="Focus" value="—" />
+            <MetricBar label="Progress" value="—" />
+            <div className="live-meta-row"><span>Blocker</span><b>{unpaired ? 'Not linked' : online ? 'None' : 'Daemon offline'}</b></div>
+            <div className="live-meta-row"><span>Focus block</span><b>{sessionActive ? '—' : '—'}</b></div>
+            {unpaired && (
+              <button type="button" className="secondary-action compact-action" onClick={onDocs}>Open Docs</button>
+            )}
+          </aside>
 
-      <aside className="glass-panel insight-panel">
-        <header><span><FlowIcon>☼</FlowIcon> AI Insight</span><b>{online ? 'Listening' : 'Standby'}</b></header>
-        <p>
-          {unpaired && 'Pair your device to receive live insights from local sessions.'}
-          {!unpaired && !online && 'Your device is still linked. Start the daemon locally — this panel fills in when a session is running.'}
-          {online && `At the ${stage.label} stage, FLOW waits for observations from flow start on ${device?.name ?? 'your device'}.`}
-        </p>
-        {!unpaired && (
-          <>
-            <div className="panel-divider" />
-            <div className="insight-actions">
-              <button type="button" className="primary-action" disabled={!online} onClick={() => onAnnounce('When a session runs, recommended actions appear here.')}>▶ Next action</button>
-              <button type="button" className="secondary-action" onClick={onDocs}>Docs</button>
-              {onGoAgent && (
-                <button type="button" className="secondary-action" disabled={!online} onClick={() => { onGoAgent(); onAnnounce('Delegate from Agent tab.'); }}>Delegate</button>
+          <div className="session-stage-spine" aria-label="Workspace scene">
+            {!unpaired && (
+              <nav className="stage-rail-inline" aria-label="Session stages">
+                {WORKSPACE_STAGES.map((item, index) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    className={index === stageIndex ? 'is-current' : index < stageIndex ? 'is-complete' : ''}
+                    onClick={() => selectStage(index)}
+                    aria-current={index === stageIndex ? 'step' : undefined}
+                  >
+                    <span>{index + 1}</span> {item.label}
+                  </button>
+                ))}
+              </nav>
+            )}
+            <div className="cockpit-float-layer" aria-hidden={unpaired}>
+              {!unpaired && (
+                <>
+                  <button type="button" className="scene-card editor-card scene-card-btn cockpit-float" onClick={() => onAnnounce(`${device?.name ?? 'Workspace'} · active app on device`)}>
+                    <FlowIcon>⌘</FlowIcon><span>VS Code<small>{sessionActive ? 'auth/token.py' : 'When session runs'}</small></span>
+                  </button>
+                  <button type="button" className="scene-card test-card scene-card-btn cockpit-float" onClick={() => onAnnounce(sessionActive ? 'Test status from device' : 'Tests appear during active sessions')}>
+                    <FlowIcon>⚠</FlowIcon><span>Tests<small>{sessionActive ? 'Live on device' : '—'}</small></span>
+                  </button>
+                </>
               )}
             </div>
-          </>
-        )}
-        {unpaired && <button type="button" className="primary-action" onClick={onDocs}>Setup in Docs</button>}
-      </aside>
-
-      <InteractiveTimeline live={online} onSelect={onAnnounce} />
-
-      <section className="glass-panel activity-panel" aria-label="Live activity">
-        <header>
-          <strong><i aria-hidden="true" />Live Activity</strong>
-          <button type="button" onClick={() => onAnnounce('Full activity history stays on your device.')}>View all</button>
-        </header>
-        {ACTIVITY_STUBS.map((row, index) => (
-          <div key={row.label}>
-            <button
-              type="button"
-              className="activity-row activity-row-btn"
-              aria-expanded={activityOpen === index}
-              onClick={() => { setActivityOpen(activityOpen === index ? null : index); onAnnounce(row.label); }}
-            >
-              <FlowIcon>{row.icon}</FlowIcon><span>{row.label}</span><time>{online ? 'Live soon' : 'Preview'}</time>
-            </button>
-            {activityOpen === index && <p className="activity-detail">{row.detail}</p>}
           </div>
-        ))}
+
+          <aside className="glass-panel insight-panel level-2" aria-label="Next action">
+            <header><span><FlowIcon>☼</FlowIcon> {insightTitle}</span><b>{insightBadge}</b></header>
+            <p>{insightBody}</p>
+            {sessionActive && (
+              <p className="insight-placeholder">Next recommended action appears here when FLOW has enough evidence from your session.</p>
+            )}
+            {!unpaired && !sessionActive && (
+              <button type="button" className="secondary-action compact-action" onClick={onDocs}>Setup in Docs</button>
+            )}
+            {onGoAgent && online && (
+              <button type="button" className="secondary-action compact-action" onClick={() => { onGoAgent(); onAnnounce('Opened Agent.'); }}>Delegate to Agent</button>
+            )}
+          </aside>
+        </div>
+
+        <InteractiveTimeline
+          live={sessionActive}
+          preview={false}
+          compact
+          onSelect={onAnnounce}
+          onOpenActivity={() => setActivityOpen(true)}
+        />
       </section>
-    </section>
+
+      <FlowDrawer open={activityOpen} title="Activity" onClose={() => setActivityOpen(false)}>
+        <SessionActivityDrawerContent
+          rows={sessionActive ? [] : []}
+          empty={sessionActive ? 'Live activity rows stream from your device during sessions.' : 'No active session — activity appears when flow start is running.'}
+        />
+      </FlowDrawer>
+    </>
   );
 }

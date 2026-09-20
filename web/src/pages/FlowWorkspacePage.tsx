@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AgentWorkspace } from '../components/flow/AgentWorkspace';
 import { DocsTabPanel } from '../components/flow/DocsTabPanel';
-import { FlowIcon } from '../components/flow/FlowIcon';
+import { FlowDrawer } from '../components/flow/FlowDrawer';
 import { FlowWorkspaceHeader, type WorkspaceTab } from '../components/flow/FlowWorkspaceHeader';
 import { SessionControls } from '../components/flow/SessionControls';
 import { SessionWorkspace } from '../components/flow/SessionWorkspace';
@@ -10,13 +10,21 @@ import { FlowToast } from '../components/flow/FlowToast';
 import { ShowcaseTab } from '../components/flow/ShowcaseTab';
 import { CockpitBackdrop } from '../components/flow/CockpitBackdrop';
 import { useFlowDevices } from '../hooks/useFlowDevices';
-import { modelStatus, pairingState } from '../lib/flowDeviceModel';
+import { modelStatus, pairingState, presenceLabel } from '../lib/flowDeviceModel';
 import type { AccountUser } from '../lib/flowWorkspaceUi';
 
 function parseTab(raw: string | null): WorkspaceTab {
   if (raw === 'agent' || raw === 'docs' || raw === 'showcase') return raw;
   return 'session';
 }
+
+const PRIVACY_ROWS = [
+  ['Screen analysis', 'Local'],
+  ['Screenshot retention', 'Off'],
+  ['Account DB', 'Metadata only'],
+  ['Models', 'Local'],
+  ['Agent execution', 'Local'],
+] as const;
 
 export default function FlowWorkspacePage({ account }: { account?: AccountUser }) {
   const [params, setParams] = useSearchParams();
@@ -44,11 +52,13 @@ export default function FlowWorkspacePage({ account }: { account?: AccountUser }
   }, [tab]);
 
   const health = device?.presence.health ?? {};
-  const footerModels = presence === 'online'
-    ? [modelStatus(health.model), 'Kokoro TTS'].filter(Boolean)
-    : ['Local models on your device'];
-
   const immersive = tab === 'session' || tab === 'agent' || tab === 'showcase';
+  const footerDevice = pairing === 'paired'
+    ? `${device?.name ?? 'Device'} ● ${presence === 'online' ? 'Connected' : presenceLabel(presence)}`
+    : 'Link a device';
+  const footerModels = presence === 'online' && health.model
+    ? modelStatus(health.model)
+    : 'Models on device';
 
   return (
     <main className={`flow-workspace${immersive ? ' is-immersive' : ''}`} aria-label="FLOW workspace">
@@ -84,7 +94,15 @@ export default function FlowWorkspacePage({ account }: { account?: AccountUser }
           {tab === 'agent' && (
             <AgentWorkspace device={device} pairing={pairing} presence={presence} onDocs={() => setTab('docs')} onAnnounce={setNotice} />
           )}
-          {tab === 'docs' && <DocsTabPanel />}
+          {tab === 'docs' && (
+            <DocsTabPanel
+              device={device}
+              pairing={pairing}
+              presence={presence}
+              accountName={account?.name}
+              onAnnounce={setNotice}
+            />
+          )}
           {tab === 'showcase' && <ShowcaseTab onAnnounce={setNotice} onViewChange={setShowcaseView} />}
         </div>
         {tab === 'session' && pairing === 'paired' && (
@@ -101,21 +119,21 @@ export default function FlowWorkspacePage({ account }: { account?: AccountUser }
           />
         )}
         <FlowToast message={notice} onClear={() => setNotice('')} />
-        <footer className="flow-footer">
-          <button type="button" className="privacy-chip" onClick={() => setPrivacyOpen((v) => !v)}>🔒 Work data stays on your device</button>
-          {privacyOpen && (
-            <p className="privacy-pop">Session content, code, and observations remain on your linked machine. The account stores identity and device metadata only.</p>
-          )}
-          <span>
-            <i aria-hidden="true" />
-            {pairing === 'paired'
-              ? (presence === 'online' ? 'Connected to your device' : `${device?.name ?? 'Device'} offline · still linked`)
-              : 'Link a device to begin'}
-          </span>
-          {footerModels.map((label) => <b key={label}>{label}</b>)}
-          <small><FlowIcon>♙</FlowIcon>All data stays on your machine. Always.</small>
+        <footer className="flow-footer flow-footer-compact">
+          <button type="button" className="privacy-chip" onClick={() => setPrivacyOpen(true)}>🔒 Local-first</button>
+          <span><i className={presence === 'online' ? 'online' : ''} aria-hidden="true" />{footerDevice}</span>
+          <b>{footerModels}</b>
         </footer>
       </div>
+
+      <FlowDrawer open={privacyOpen} title="Privacy" onClose={() => setPrivacyOpen(false)}>
+        <dl className="privacy-drawer-list">
+          {PRIVACY_ROWS.map(([label, value]) => (
+            <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
+          ))}
+        </dl>
+        <p className="drawer-empty">Session content and code stay on your linked machine. This account stores identity and device metadata only.</p>
+      </FlowDrawer>
     </main>
   );
 }

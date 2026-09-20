@@ -1,45 +1,67 @@
 import { useState } from 'react';
 
 const SEGMENTS = [
-  { kind: 'away', flex: '1', label: 'Away', time: '10:12' },
-  { kind: 'focused', flex: '1', label: 'Focused', time: '10:28' },
-  { kind: 'focused short', flex: '.45', label: 'Focused', time: '10:52' },
-  { kind: 'mixed', flex: '1', label: 'Mixed', time: '11:05' },
-  { kind: 'away small', flex: '.32', label: 'Away', time: '11:18' },
-  { kind: 'mixed long', flex: '1.8', label: 'Mixed', time: '11:40' },
-  { kind: 'focused', flex: '1', label: 'Focused', time: '12:10' },
-  { kind: 'agent small', flex: '.32', label: 'Agent', time: '12:45' },
-  { kind: 'focused long', flex: '1.8', label: 'Focused', time: '1:05' },
-  { kind: 'agent', flex: '1', label: 'Agent', time: '1:42' },
+  { kind: 'away', flex: '1', label: 'Away', time: '10:12', range: '10:12–10:20', detail: 'Away from desk', align: '—' },
+  { kind: 'focused', flex: '1', label: 'Focused', time: '10:28', range: '10:28–10:41', detail: 'Implementing auth flow', align: '91%' },
+  { kind: 'focused short', flex: '.45', label: 'Focused', time: '10:52', range: '10:52–10:58', detail: 'Reading tests', align: '88%' },
+  { kind: 'mixed', flex: '1', label: 'Mixed', time: '11:05', range: '11:05–11:22', detail: 'Context switching', align: '62%' },
+  { kind: 'agent', flex: '1', label: 'Agent', time: '1:42', range: '1:42–1:55', detail: 'Agent-assisted fix', align: '95%' },
 ] as const;
 
-export function InteractiveTimeline({ onSelect, live }: { onSelect: (message: string) => void; live?: boolean }) {
+export function InteractiveTimeline({
+  onSelect,
+  live,
+  preview = true,
+  compact,
+  onOpenActivity,
+}: {
+  onSelect: (message: string) => void;
+  live?: boolean;
+  preview?: boolean;
+  compact?: boolean;
+  onOpenActivity?: () => void;
+}) {
   const [active, setActive] = useState<number | null>(null);
-  const hint = live
-    ? 'Click a block to inspect focus context (sample layout until your session streams data).'
-    : 'Timeline preview — live blocks appear during an active session on your device.';
+  const showSegments = live || preview;
+  const activeSeg = active !== null ? SEGMENTS[active] : null;
 
   return (
-    <section className="glass-panel timeline-panel" aria-label="Session timeline">
-      <header><strong>Session Timeline</strong><span><i /> Focused <i className="blue" /> Mixed <i className="gray" /> Away <i className="violet" /> Agent</span></header>
-      <p className="timeline-hint">{hint}</p>
-      <div className="timeline-track timeline-track-interactive" role="group" aria-label="Timeline segments">
-        {SEGMENTS.map((seg, index) => (
-          <button
-            key={`${seg.time}-${index}`}
-            type="button"
-            className={`timeline-seg ${seg.kind}${active === index ? ' is-active' : ''}`}
-            style={{ flex: seg.flex }}
-            aria-pressed={active === index}
-            onClick={() => {
-              setActive(index);
-              onSelect(`${seg.label} block · ${seg.time} — ${live ? 'sample segment' : 'preview only'}`);
-            }}
-          />
-        ))}
-        <span className="timeline-now" aria-hidden="true" />
-      </div>
-      <footer><span>10:00</span><span>11:00</span><span>12:00</span><span>1:00</span><span>2:00</span><strong>Now</strong></footer>
+    <section className={`glass-panel timeline-panel level-2${compact ? ' timeline-compact' : ''}`} aria-label="Session timeline">
+      <header>
+        <strong>Timeline</strong>
+        <span className="timeline-legend"><i /> Focused <i className="blue" /> Mixed <i className="gray" /> Away <i className="violet" /> Agent</span>
+        {onOpenActivity && (
+          <button type="button" className="timeline-activity-btn" onClick={onOpenActivity}>View activity</button>
+        )}
+        {live && <time className="timeline-elapsed">—</time>}
+      </header>
+      {!showSegments ? (
+        <p className="timeline-empty">No active session — timeline fills in when flow start is running on your device.</p>
+      ) : (
+        <>
+          {activeSeg && (
+            <p className="timeline-hover-meta">{activeSeg.range} · {activeSeg.detail} · Alignment {activeSeg.align}</p>
+          )}
+          <div className="timeline-track timeline-track-interactive" role="group" aria-label="Timeline segments">
+            {SEGMENTS.map((seg, index) => (
+              <button
+                key={`${seg.time}-${index}`}
+                type="button"
+                className={`timeline-seg ${seg.kind}${active === index ? ' is-active' : ''}`}
+                style={{ flex: seg.flex }}
+                aria-pressed={active === index}
+                title={`${seg.range} · ${seg.detail}`}
+                onClick={() => {
+                  setActive(index);
+                  onSelect(`${seg.label} · ${seg.range} · ${live ? seg.detail : 'preview'}`);
+                }}
+              />
+            ))}
+            <span className="timeline-now" aria-hidden="true" />
+          </div>
+          <footer><span>Start</span><strong>{live ? 'Now' : 'Preview'}</strong></footer>
+        </>
+      )}
     </section>
   );
 }
