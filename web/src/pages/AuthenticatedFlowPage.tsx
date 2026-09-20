@@ -14,5 +14,5 @@ export function AuthenticatedFlowPage() {
   if (error) return <main className="account-status"><h1>FLOW is temporarily unavailable.</h1><p>Try refreshing the page in a moment.</p></main>;
   if (session === undefined) return <main className="account-status" aria-live="polite">Checking your secure FLOW session…</main>;
   if (!session) return <Navigate to="/auth?next=/app" replace />;
-  return <FlowDemoPage />;
+  return <FlowDemoPage account={session.user} />;
 }

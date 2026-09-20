@@ -23,10 +23,16 @@ function RequireAuth() {
   return <Shell />;
 }
 
+function AmbientFloor() {
+  const { pathname } = useLocation();
+  if (pathname.startsWith('/app') || pathname.startsWith('/auth') || pathname.startsWith('/cli')) return null;
+  return <div className="floor" aria-hidden="true" />;
+}
+
 export function App() {
   return (
     <>
-      <div className="floor" aria-hidden="true" />
+      <AmbientFloor />
       <Suspense fallback={<div className="page-loading"><Spinner /></div>}>
         <Routes>
           <Route path="/" element={<Navigate to="/app" replace />} />

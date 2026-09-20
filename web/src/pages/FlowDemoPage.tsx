@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import agentScene from '../assets/flow-agent-scene.png';
 import sessionScene from '../assets/flow-session-scene.png';
 import { DocsTabPanel } from '../components/flow/DocsTabPanel';
@@ -28,7 +28,9 @@ function presenceTone(presence: PresenceState): 'online' | 'degraded' | 'offline
   return 'offline';
 }
 
-export default function FlowDemoPage() {
+type AccountUser = { id: string; email: string; name: string };
+
+export default function FlowDemoPage({ account }: { account?: AccountUser }) {
   const [params, setParams] = useSearchParams();
   const tabParam = params.get('tab');
   const tab: Tab = tabParam === 'agent' || tabParam === 'docs' ? tabParam : 'session';
@@ -67,7 +69,10 @@ export default function FlowDemoPage() {
               <i className={`device-dot ${headerTone}`} aria-hidden="true" />
               <span>{device?.name ?? 'No device'}<small>{headerPresence}</small></span>
             </div>
-            <Link to="/devices" className="flow-account-link">Account</Link>
+            <div className="flow-account-chip" title={account?.email}>
+              <span>{account?.name?.split(' ')[0] ?? 'Account'}</span>
+              <button type="button" onClick={() => void fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).finally(() => { window.location.href = '/auth'; })}>Sign out</button>
+            </div>
           </div>
         </header>
 
