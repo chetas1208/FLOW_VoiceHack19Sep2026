@@ -1,5 +1,6 @@
 # FLOW · VoiceHack 19 Sep 2026
 
+
 FLOW is a local-first AI work-session observer and coach built beside the
 ProofHound QA foundation. It records durable work sessions, ingests structured
 observations, computes evidence-backed focus and drift metrics, supports privacy
@@ -168,3 +169,5 @@ No verified live Docker sandbox, compiled HACP adapter, full remote A2A
 interoperability, Appium device pilot, unrestricted native Chromium networking,
 real external customer pilot, production multi-tenancy or semantic-judge calibration. A four-case fixture benchmark is only a smoke test.
 Do not claim all 14 original milestones are production-complete; see the audit.
+<img width="1460" height="812" alt="flow-demo-walkthrough" src="https://github.com/user-attachments/assets/a1e223f5-a9ed-48ea-86a5-3dfd8646e820" />
+
