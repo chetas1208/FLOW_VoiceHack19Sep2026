@@ -128,7 +128,7 @@ docs/flow/      Backlog and scope notes: what's implemented vs. still design-onl
 
 `web/` is a separate, deterministic recreation of the original FLOW UI/UX
 reference design — a cinematic marketing-style workspace, not the live
-product above. `FlowDemoPage` owns the local clock and tab state, `Diorama`
+product above. `FlowWorkspacePage` owns tab state and device presence, `Diorama`
 renders the stage-aware workstation, and theme tokens live in
 `web/src/styles/tokens.css`.
 
